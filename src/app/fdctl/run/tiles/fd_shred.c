@@ -470,7 +470,7 @@ during_frag( fd_shred_ctx_t * ctx,
     FD_TEST( hdr_sz <= sz ); /* Should be ensured by the net tile */
 
     uchar buf[STL_BASIC_PAYLOAD_MTU];
-    stl_s0_server_hs_t hs = {0};
+    stl_s0_server_hs_t hs = {.session_id = {0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}};
     for( uchar i=0; i<16; ++i ) {
       hs.identity[i] = i;
     }
@@ -525,7 +525,7 @@ send_shred( fd_shred_ctx_t *      ctx,
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
 
   uchar buf[STL_MTU];
-  stl_s0_client_hs_t send_hs = {0};
+  stl_s0_client_hs_t send_hs = {.session_id = {0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}};
   ulong encoded_sz;
   do {
     long tmp = stl_s0_encode_appdata( &send_hs, (uchar*)shred, (ushort)shred_sz, buf);
