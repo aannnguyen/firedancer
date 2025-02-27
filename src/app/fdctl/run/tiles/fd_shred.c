@@ -489,8 +489,8 @@ during_frag( fd_shred_ctx_t * ctx,
       ctx->skip_frag = 1;
       return;
     }
-    fd_memcpy( ctx->shred_buffer, dcache_entry+hdr_sz, sz-hdr_sz );
-    ctx->shred_buffer_sz = sz-hdr_sz;
+    fd_memcpy( ctx->shred_buffer, buf, (size_t)read_bytes );
+    ctx->shred_buffer_sz = (ulong)read_bytes;
   }
 }
 
