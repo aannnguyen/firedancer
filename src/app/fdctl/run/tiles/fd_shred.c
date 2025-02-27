@@ -11,6 +11,10 @@
 #include "../../../../flamenco/leaders/fd_leaders.h"
 #include "../../../../disco/fd_disco.h"
 
+#include "../../../../waltz/stl/fd_stl_s0_server.h"
+#include "../../../../waltz/stl/fd_stl_s0_client.h"
+
+
 #include "../../../../util/net/fd_net_headers.h"
 
 #include <linux/unistd.h>
@@ -464,7 +468,15 @@ during_frag( fd_shred_ctx_t * ctx,
     uchar const * dcache_entry = (uchar const *)fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk ) + ctl;
     ulong hdr_sz = fd_disco_netmux_sig_hdr_sz( sig );
     FD_TEST( hdr_sz <= sz ); /* Should be ensured by the net tile */
-    fd_shred_t const * shred = fd_shred_parse( dcache_entry+hdr_sz, sz-hdr_sz );
+
+    uchar buf[STL_BASIC_PAYLOAD_MTU];
+    stl_s0_server_hs_t hs = {0};
+    for( uchar i=0; i<16; ++i ) {
+      hs.identity[i] = i;
+    }
+    long read_bytes = stl_s0_decode_appdata( &hs, dcache_entry+hdr_sz, (ushort)(sz-hdr_sz), buf );
+    FD_TEST(read_bytes > 0);
+    fd_shred_t const * shred = fd_shred_parse( buf, (ulong)read_bytes );
     if( FD_UNLIKELY( !shred ) ) {
       ctx->skip_frag = 1;
       return;
@@ -511,9 +523,19 @@ send_shred( fd_shred_ctx_t *      ctx,
   hdr->udp->net_dport  = fd_ushort_bswap( dest->port );
 
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
-  fd_memcpy( packet+sizeof(fd_net_hdrs_t), shred, shred_sz );
 
-  ulong pkt_sz = shred_sz + sizeof(fd_net_hdrs_t);
+  uchar buf[STL_MTU];
+  stl_s0_client_hs_t send_hs = {0};
+  ulong encoded_sz;
+  do {
+    long tmp = stl_s0_encode_appdata( &send_hs, (uchar*)shred, (ushort)shred_sz, buf);
+    if( tmp <= 0 ) return;
+    encoded_sz = (ulong)tmp;
+  } while(0);
+
+  fd_memcpy( packet+sizeof(fd_net_hdrs_t), buf, encoded_sz );
+
+  ulong pkt_sz = encoded_sz + sizeof(fd_net_hdrs_t);
 
   ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong   sig = fd_disco_netmux_sig( dest->ip4, dest->port, dest->ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );

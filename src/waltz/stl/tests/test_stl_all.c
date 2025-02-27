@@ -1,0 +1,194 @@
+#define _POSIX_C_SOURCE 199309L
+
+#include "../fd_stl_private.h"
+#include "../fd_stl_s0_server.h"
+#include "../fd_stl_s0_client.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+static long
+wallclock( void ) {
+  struct timespec ts[1];
+  clock_gettime( CLOCK_REALTIME, ts );
+  return ((long)1e9)*((long)ts->tv_sec) + (long)ts->tv_nsec;
+}
+
+
+static void
+test_s0_handshake( void ) {
+
+  // uint8_t server_identity_seed[32]={0}; server_identity_seed[31] = 0x01;
+  // uint8_t client_identity_seed[32]={0}; client_identity_seed[31] = 0x81;
+
+  // uint8_t scratch[32];
+
+  stl_s0_server_params_t server = {0};
+
+  for( uint32_t i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
+    server.identity[i] = (uint8_t)(i&0xff);
+  }
+  server.cookie_secret[15] = 0x02;
+  server.token[15] = 0x03; /* FIXME: shouldn't this be rng in stl_s0_server_handshake? */
+
+  stl_s0_client_params_t client = {0};
+  for( uint32_t i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
+    server.identity[i] = (uint8_t)(i&0x7f);
+  }
+  client.cookie_secret[15] = 0x12;
+
+  stl_s0_server_hs_t server_hs = {0};
+  stl_s0_client_hs_t client_hs; stl_s0_client_hs_new( &client_hs );
+
+  /* FIXME: create fn to init with server identity and gen token */
+  memcpy( client_hs.server_identity, server.identity, STL_EDBLAH_KEY_SZ );
+  client_hs.client_token[15] = 0x13;
+
+  stl_net_ctx_t client_addr = {0};
+  client_addr.src_addr[15] = 0x21;
+  client_addr.src_port     = 8001;
+
+  uint8_t client_pkt[ STL_MTU ];
+  uint8_t server_pkt[ STL_MTU ];
+
+  uint64_t client_pkt_sz;
+  uint64_t server_pkt_sz;
+
+  client_pkt_sz = stl_s0_client_initial( &client, &client_hs, client_pkt );
+  assert( client_pkt_sz>0UL );
+  assert( client_hs.state == STL_TYPE_HS_CLIENT_INITIAL );
+
+  server_pkt_sz = stl_s0_server_handshake( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
+  assert( server_pkt_sz>0UL );
+  assert( !server_hs.done );
+
+  client_pkt_sz = stl_s0_client_handshake( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
+  assert( client_pkt_sz>0UL );
+  assert( client_hs.state == STL_TYPE_HS_SERVER_CONTINUE );
+
+  server_pkt_sz = stl_s0_server_handshake( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
+  assert( server_pkt_sz>0UL );
+  assert( server_hs.done );
+
+  client_pkt_sz = stl_s0_client_handshake( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
+  assert( client_pkt_sz==0UL ); /* FIXME: 0 should not be both error and success */
+  assert( client_hs.state == STL_TYPE_HS_SERVER_ACCEPT );
+
+  puts( "S0 handshake: OK" );
+
+  uint8_t payload[STL_BASIC_PAYLOAD_MTU]; /* FIXME: use the correct MTU here */
+  uint8_t rcv_payload[STL_BASIC_PAYLOAD_MTU];
+  uint16_t payload_sz = STL_BASIC_PAYLOAD_MTU;
+  int64_t rcv_payload_sz;
+
+  for( uint16_t i=0; i<payload_sz; ++i ) {
+    payload[i] = (uint8_t)(i&0xff);
+  }
+
+  /*
+  stl_endpoint_send_all( payload, ..list_of_dst.. ) {
+    if (multicast_enabled) {
+      stl_s0_endpoint_send(..., config={ multicast })
+    }
+    for dst in list_of_dst {
+      if dst.is_multicast {
+        continue
+      }
+      stl_s0_endpoint_send(..., config={ })
+    }
+  }
+  */
+
+  int64_t encoded_sz = stl_s0_encode_appdata(&client_hs, payload, payload_sz, client_pkt /*, config */);
+  assert(encoded_sz > 0L);
+
+  /* client_pkt to net tile -> client_pkt from net tile */
+
+  rcv_payload_sz = stl_s0_decode_appdata(&server_hs, client_pkt, (uint16_t)encoded_sz, rcv_payload);
+  assert(server_pkt_sz > 0UL);
+  assert(rcv_payload_sz == payload_sz);
+  assert(memcmp(rcv_payload, payload, (size_t)rcv_payload_sz) == 0);
+  puts("S0 application decode/encode: OK");
+
+}
+
+static void
+bench_cookie( void ) {
+
+  stl_cookie_claims_t const claims = {0};
+  uint8_t const cookie_secret[ STL_COOKIE_KEY_SZ ] = {0};
+  uint8_t cookie[32];
+
+  /* warmup */
+  for( unsigned long rem=1000000UL; rem; rem-- ) {
+    stl_cookie_create( cookie, &claims, cookie_secret );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (cookie[0]) );
+  }
+
+  /* for real */
+  unsigned long iter = 20000000UL;
+  long          dt   = -wallclock();
+  for( unsigned long rem=iter; rem; rem-- ) {
+    stl_cookie_create( cookie, &claims, cookie_secret );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (cookie[0]) );
+  }
+  dt += wallclock();
+
+  double ops  = ((double)iter) / ((double)dt) * 1e3;
+  double ns   = ((double)dt) / ((double)iter);
+  double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
+  fprintf( stderr, "Benchmarking cookie issue\n" );
+  fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
+  fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
+  fprintf( stderr, "\t~%6.3f ns / op\n", ns );
+}
+
+static void
+bench_cookie_verify( void ) {
+
+  stl_cookie_claims_t claims = {0};
+  uint8_t const cookie_secret[ STL_COOKIE_KEY_SZ ] = {0};
+  uint8_t cookie[32] = {0};
+
+  /* warmup */
+  for( unsigned long rem=1000000UL; rem; rem-- ) {
+    int res = stl_cookie_verify( cookie, &claims, cookie_secret );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (cookie[0]) );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (res      ) );
+  }
+
+  /* for real */
+  unsigned long iter = 20000000UL;
+  long          dt   = -wallclock();
+  for( unsigned long rem=iter; rem; rem-- ) {
+    int res = stl_cookie_verify( cookie, &claims, cookie_secret );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (cookie[0]) );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (res      ) );
+  }
+  dt += wallclock();
+
+  double ops  = ((double)iter) / ((double)dt) * 1e3;
+  double ns   = ((double)dt) / ((double)iter);
+  double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
+  fprintf( stderr, "Benchmarking cookie verify\n" );
+  fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
+  fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
+  fprintf( stderr, "\t~%6.3f ns / op\n", ns );
+}
+
+int
+main( int     argc,
+      char ** argv ) {
+  (void)argc;
+  (void)argv;
+
+  test_s0_handshake();
+  bench_cookie();
+  bench_cookie_verify();
+
+  return 0;
+}

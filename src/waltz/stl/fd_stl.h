@@ -1,0 +1,4 @@
+#ifndef HEADER_fd_src_waltz_stl_fd_stl_h
+#define HEADER_fd_src_waltz_stl_fd_stl_h
+
+#endif
