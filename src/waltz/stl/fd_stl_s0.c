@@ -3,7 +3,7 @@
 #include "fd_stl_s0_client.h"
 #include "fd_stl_proto.h"
 #include "fd_stl_private.h"
-#include <stdint.h>
+
 #include <string.h>
 #include <sys/random.h>
 
@@ -15,11 +15,11 @@ static char const sign_prefix_client[32] =
   "STL v0 s0 client transcript     ";
 #endif
 
-static uint64_t
+static ulong
 stl_s0_server_handle_initial( stl_s0_server_params_t const * server,
                               stl_net_ctx_t const *          ctx,
                               stl_s0_hs_pkt_t const *        pkt,
-                              uint8_t                        out[ static STL_MTU ],
+                              uchar                        out[ static STL_MTU ],
                               stl_s0_server_hs_t *           hs ) {
 
   (void)pkt;
@@ -31,7 +31,7 @@ stl_s0_server_handle_initial( stl_s0_server_params_t const * server,
   claims->net   = *ctx;
   claims->suite = STL_SUITE_S0;
 
-  uint8_t cookie[ STL_COOKIE_SZ ];
+  uchar cookie[ STL_COOKIE_SZ ];
   stl_cookie_create( cookie, claims, server->cookie_secret );
 
   /* Send back the cookie and our server identity */
@@ -54,11 +54,11 @@ stl_s0_server_handle_initial( stl_s0_server_params_t const * server,
   return sizeof(stl_s0_hs_pkt_t);
 }
 
-static uint64_t
+static ulong
 stl_s0_server_handle_accept( stl_s0_server_params_t const * server,
                              stl_net_ctx_t const *          ctx,
                              stl_s0_hs_pkt_t const *        pkt,
-                             uint8_t                        out[ static STL_MTU ],
+                             uchar                        out[ static STL_MTU ],
                              stl_s0_server_hs_t *           hs ) {
 
   /* Verify the SYN cookie */
@@ -72,7 +72,7 @@ stl_s0_server_handle_accept( stl_s0_server_params_t const * server,
     return 0UL;
 
 
-  uint8_t server_pubkey[32];
+  uchar server_pubkey[32];
   memcpy( server_pubkey, server->identity, STL_COOKIE_KEY_SZ*2 );
 #if 0
   /* Create the transcript hash */
@@ -83,12 +83,12 @@ stl_s0_server_handle_accept( stl_s0_server_params_t const * server,
   crypto_hash_sha256_update( state0, pkt->identity,     crypto_sign_ed25519_PUBLICKEYBYTES );
   crypto_hash_sha256_update( state0, server->token,     STL_TOKEN_SZ );
   crypto_hash_sha256_update( state0, pkt->client_token, STL_TOKEN_SZ );
-  crypto_hash_sha256_update( state0, (uint8_t const *)&claims->suite, sizeof(uint16_t) );
+  crypto_hash_sha256_update( state0, (uchar const *)&claims->suite, sizeof(ushort) );
   *state1 = *state0;
 
   /* Verify signature */
 
-  uint8_t client_signed_msg[64];
+  uchar client_signed_msg[64];
   memcpy( client_signed_msg, sign_prefix_client, 32 );
   crypto_hash_sha256_final( state0, client_signed_msg+32 );
 
@@ -99,7 +99,7 @@ stl_s0_server_handle_accept( stl_s0_server_params_t const * server,
 
   /* Derive session ID */
 
-  uint8_t session_id[ STL_SESSION_ID_SZ ];
+  uchar session_id[ STL_SESSION_ID_SZ ];
   stl_gen_session_id( session_id );
 
   /* Prepare response */
@@ -108,13 +108,13 @@ stl_s0_server_handle_accept( stl_s0_server_params_t const * server,
   memset( out_pkt, 0, sizeof(*out_pkt) );
 
 #if 0
-  uint8_t server_commitment[ crypto_hash_sha256_BYTES ];
+  uchar server_commitment[ crypto_hash_sha256_BYTES ];
   crypto_hash_sha256_update( state1, session_id, STL_SESSION_ID_SZ );
   crypto_hash_sha256_final( state1, server_commitment );
 
   /* Sign verify */
 
-  uint8_t server_signed_msg[64];
+  uchar server_signed_msg[64];
   memcpy( server_signed_msg,    sign_prefix_server, 32 );
   memcpy( server_signed_msg+32, server_commitment,  32 );
 
@@ -141,20 +141,20 @@ stl_s0_server_handle_accept( stl_s0_server_params_t const * server,
   return sizeof(stl_s0_hs_pkt_t);
 }
 
-uint64_t
+ulong
 stl_s0_server_handshake( stl_s0_server_params_t const * server,
                          stl_net_ctx_t const *          ctx,
-                         uint8_t const *                in,
-                         uint64_t                       in_sz,
-                         uint8_t                        out[ static STL_MTU ],
+                         uchar const *                in,
+                         ulong                       in_sz,
+                         uchar                        out[ static STL_MTU ],
                          stl_s0_server_hs_t *           hs ) {
 
-  if( STL_UNLIKELY( in_sz < 1200UL ) )
+  if( FD_UNLIKELY( in_sz < 1200UL ) )
     return 0UL;
 
   stl_s0_hs_pkt_t const * pkt = (stl_s0_hs_pkt_t const *)in;
 
-  if( STL_UNLIKELY( ( stl_hdr_version( &pkt->hs.base ) != STL_V0 ) |
+  if( FD_UNLIKELY( ( stl_hdr_version( &pkt->hs.base ) != STL_V0 ) |
                     ( pkt->hs.suite != STL_SUITE_S0 ) ) )
     return 0UL;
 
@@ -186,10 +186,10 @@ stl_s0_client_hs_new( void * mem ) {
 
 }
 
-uint64_t
+ulong
 stl_s0_client_initial( stl_s0_client_params_t const * client,
                        stl_s0_client_hs_t const *     hs,
-                       uint8_t                        pkt_out[ static STL_MTU ] ) {
+                       uchar                        pkt_out[ static STL_MTU ] ) {
 
   stl_s0_hs_pkt_t * pkt = (stl_s0_hs_pkt_t *)pkt_out;
   memset( pkt, 0, 1200 );  /* TODO fix magic constant */
@@ -201,21 +201,21 @@ stl_s0_client_initial( stl_s0_client_params_t const * client,
 
 }
 
-static uint64_t
+static ulong
 stl_s0_client_handle_continue( stl_s0_client_params_t const * client,
                                stl_s0_hs_pkt_t const *        pkt,
-                               uint8_t                        out[ static STL_MTU ],
+                               uchar                        out[ static STL_MTU ],
                                stl_s0_client_hs_t *           hs ) {
 
-  if( STL_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_CONTINUE ) )
+  if( FD_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_CONTINUE ) )
     return 0UL;
 
   /* Ignore packet if server identity is unexpected */
 
-  if( STL_UNLIKELY( 0!=memcmp( pkt->identity, hs->server_identity, STL_EDBLAH_KEY_SZ ) ) )
+  if( FD_UNLIKELY( 0!=memcmp( pkt->identity, hs->server_identity, STL_EDBLAH_KEY_SZ ) ) )
     return 0UL;
 
-  uint8_t client_identity[ 32 ];
+  uchar client_identity[ 32 ];
   memcpy( client_identity, client->identity, STL_COOKIE_KEY_SZ*2 );
 
 #if 0
@@ -226,11 +226,11 @@ stl_s0_client_handle_continue( stl_s0_client_params_t const * client,
   crypto_hash_sha256_update( state, client_identity,     crypto_sign_ed25519_PUBLICKEYBYTES );
   crypto_hash_sha256_update( state, pkt->server_token,   STL_TOKEN_SZ );
   crypto_hash_sha256_update( state, hs->client_token,    STL_TOKEN_SZ );
-  crypto_hash_sha256_update( state, (uint8_t const *)&pkt->hs.suite, sizeof(uint16_t) );
+  crypto_hash_sha256_update( state, (uchar const *)&pkt->hs.suite, sizeof(ushort) );
   /* FIXME: add cookie to hash */
   hs->transcript = *state;
 
-  uint8_t client_signed_msg[ 64 ]; /* TODO: client_to_be_signed :) */
+  uchar client_signed_msg[ 64 ]; /* TODO: client_to_be_signed :) */
   memcpy( client_signed_msg, sign_prefix_client, 32 );
   crypto_hash_sha256_final( state, client_signed_msg+32 );
 
@@ -243,7 +243,7 @@ stl_s0_client_handle_continue( stl_s0_client_params_t const * client,
   /* Sign */
 
   int sign_err = crypto_sign_ed25519_detached( out_pkt->verify, NULL, client_signed_msg, sizeof(client_signed_msg), client->identity );
-  if( STL_UNLIKELY( sign_err ) ) return 0UL;
+  if( FD_UNLIKELY( sign_err ) ) return 0UL;
 #endif
   out_pkt->hs.base.version_type = stl_hdr_version_type( STL_V0, STL_TYPE_HS_CLIENT_ACCEPT );
   out_pkt->hs.suite = STL_SUITE_S0;
@@ -257,11 +257,11 @@ stl_s0_client_handle_continue( stl_s0_client_params_t const * client,
   return 1200UL;
 }
 
-static uint64_t
+static ulong
 stl_s0_client_handle_accept( stl_s0_hs_pkt_t const * pkt,
                              stl_s0_client_hs_t *    hs ) {
 
-  if( STL_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_ACCEPT ) )
+  if( FD_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_ACCEPT ) )
     return 0UL;
 
 #if 0
@@ -273,7 +273,7 @@ stl_s0_client_handle_accept( stl_s0_hs_pkt_t const * pkt,
 
   /* Verify server signature */
 
-  uint8_t signed_msg[64];
+  uchar signed_msg[64];
   memcpy( signed_msg, sign_prefix_server, 32 );
   crypto_hash_sha256_final( state, signed_msg+32 );
 
@@ -290,19 +290,19 @@ stl_s0_client_handle_accept( stl_s0_hs_pkt_t const * pkt,
   return 0UL;
 }
 
-uint64_t
+ulong
 stl_s0_client_handshake( stl_s0_client_params_t const * client,
                          stl_s0_client_hs_t *           hs,
-                         uint8_t const *                pkt_in,
-                         uint64_t                       pkt_in_sz,
-                         uint8_t                        pkt_out[ static STL_MTU ] ) {
+                         uchar const *                pkt_in,
+                         ulong                       pkt_in_sz,
+                         uchar                        pkt_out[ static STL_MTU ] ) {
 
-  if( STL_UNLIKELY( pkt_in_sz < sizeof(stl_s0_hs_pkt_t) ) )
+  if( FD_UNLIKELY( pkt_in_sz < sizeof(stl_s0_hs_pkt_t) ) )
     return 0UL;
 
   stl_s0_hs_pkt_t const * pkt = (stl_s0_hs_pkt_t const *)pkt_in;
 
-  if( STL_UNLIKELY(
+  if( FD_UNLIKELY(
       /* Verify protocol version */
       ( stl_hdr_version( &pkt->hs.base ) != STL_V0       ) |
       ( pkt->hs.suite                    != STL_SUITE_S0 ) |
@@ -321,18 +321,18 @@ stl_s0_client_handshake( stl_s0_client_params_t const * client,
 
 }
 
-int64_t
+long
 stl_s0_encode_appdata( stl_s0_client_hs_t * hs,
-                     const uint8_t *      payload, /* TODO: create a 0cp mode */
-                     uint16_t             payload_sz,
-                     uint8_t              pkt_out[ static STL_MTU ] ) {
-  // if( hs->state != STL_TYPE_HS_SERVER_ACCEPT ) {
-  //   return -1; /* TODO - enumerate error codes */
-  // } else if( payload_sz > STL_BASIC_PAYLOAD_MTU ) {
-  //   return -2;
-  // }
+                     const uchar *      payload, /* TODO: create a 0cp mode */
+                     ushort             payload_sz,
+                     uchar              pkt_out[ static STL_MTU ] ) {
+  if( hs->state != STL_TYPE_HS_SERVER_ACCEPT ) {
+    return -1; /* TODO - enumerate error codes */
+  } else if( payload_sz > STL_BASIC_PAYLOAD_MTU ) {
+    return -2;
+  }
 
-  uint8_t* ptr = pkt_out;
+  uchar* ptr = pkt_out;
   *ptr = 0x1; /* version_type: version 0, type 1 */
   ptr += 1;
 
@@ -349,18 +349,18 @@ stl_s0_encode_appdata( stl_s0_client_hs_t * hs,
   return ptr-pkt_out;
 }
 
-int64_t
+long
 stl_s0_decode_appdata(stl_s0_server_hs_t* hs,
-                      const uint8_t* encoded_buf,
-                      uint16_t encoded_sz,
-                      uint8_t pkt_out[static STL_BASIC_PAYLOAD_MTU]) {
+                      const uchar* encoded_buf,
+                      ushort encoded_sz,
+                      uchar pkt_out[static STL_BASIC_PAYLOAD_MTU]) {
   /* Check minimum packet size (version + session_id + MAC) */
-  const uint16_t min_size = 1 + STL_SESSION_ID_SZ + STL_MAC_SZ;
+  const ushort min_size = 1 + STL_SESSION_ID_SZ + STL_MAC_SZ;
   if( encoded_sz < min_size ) {
       return -1;
   }
 
-  const uint8_t* ptr = encoded_buf;
+  const uchar* ptr = encoded_buf;
 
   /* Check version and type */
   if( *ptr != 0x1 ) { // version 0, type 1
@@ -375,15 +375,15 @@ stl_s0_decode_appdata(stl_s0_server_hs_t* hs,
   ptr += STL_SESSION_ID_SZ;
 
   /* Verify MAC (currently fake in encode, so just check for 0xff) */
-  const uint8_t* mac_ptr = encoded_buf + encoded_sz - STL_MAC_SZ;
-  for( uint64_t i=0; i<STL_MAC_SZ; i++ ) {
+  const uchar* mac_ptr = encoded_buf + encoded_sz - STL_MAC_SZ;
+  for( ulong i=0; i<STL_MAC_SZ; i++ ) {
       if( mac_ptr[i]!= 0xff ) {
           return -4;
       }
   }
 
   /* Calculate payload size (everything after headers) */
-  int64_t read_sz = mac_ptr - ptr;
+  long read_sz = mac_ptr - ptr;
   if( read_sz > 0)
     memcpy( pkt_out, ptr, (size_t)read_sz );
 

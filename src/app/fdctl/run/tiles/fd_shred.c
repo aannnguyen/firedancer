@@ -11,9 +11,7 @@
 #include "../../../../flamenco/leaders/fd_leaders.h"
 #include "../../../../disco/fd_disco.h"
 
-#include "../../../../waltz/stl/fd_stl_s0_server.h"
-#include "../../../../waltz/stl/fd_stl_s0_client.h"
-
+#include "../../../../waltz/stl/fd_stl.h"
 
 #include "../../../../util/net/fd_net_headers.h"
 
@@ -178,6 +176,8 @@ typedef struct {
   ulong       net_out_chunk0;
   ulong       net_out_wmark;
   ulong       net_out_chunk;
+
+  fd_stl_t * stl;
 
   fd_wksp_t * store_out_mem;
   ulong       store_out_chunk0;
@@ -468,29 +468,7 @@ during_frag( fd_shred_ctx_t * ctx,
     uchar const * dcache_entry = (uchar const *)fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk ) + ctl;
     ulong hdr_sz = fd_disco_netmux_sig_hdr_sz( sig );
     FD_TEST( hdr_sz <= sz ); /* Should be ensured by the net tile */
-
-    uchar buf[STL_BASIC_PAYLOAD_MTU];
-    stl_s0_server_hs_t hs = {.session_id = {0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}};
-    for( uchar i=0; i<16; ++i ) {
-      hs.identity[i] = i;
-    }
-    long read_bytes = stl_s0_decode_appdata( &hs, dcache_entry+hdr_sz, (ushort)(sz-hdr_sz), buf );
-    FD_TEST(read_bytes > 0);
-    fd_shred_t const * shred = fd_shred_parse( buf, (ulong)read_bytes );
-    if( FD_UNLIKELY( !shred ) ) {
-      ctx->skip_frag = 1;
-      return;
-    };
-    /* all shreds in the same FEC set will have the same signature
-       so we can round-robin shreds between the shred tiles based on
-       just the signature without splitting individual FEC sets. */
-    ulong sig = fd_ulong_load_8( shred->signature );
-    if( FD_LIKELY( sig%ctx->round_robin_cnt!=ctx->round_robin_id ) ) {
-      ctx->skip_frag = 1;
-      return;
-    }
-    fd_memcpy( ctx->shred_buffer, buf, (size_t)read_bytes );
-    ctx->shred_buffer_sz = (ulong)read_bytes;
+    fd_stl_process_packet(ctx->stl, dcache_entry+hdr_sz, sz-hdr_sz);
   }
 }
 
@@ -507,38 +485,20 @@ send_shred( fd_shred_ctx_t *      ctx,
   uchar * packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
 
   int is_data = fd_shred_type( shred->variant )==FD_SHRED_TYPE_MERKLE_DATA;
-  fd_net_hdrs_t * tmpl = fd_ptr_if( is_data, (fd_net_hdrs_t *)ctx->data_shred_net_hdr,
-                                            (fd_net_hdrs_t *)ctx->parity_shred_net_hdr );
-  fd_memcpy( packet, tmpl, sizeof(fd_net_hdrs_t) );
-
-  fd_net_hdrs_t * hdr = (fd_net_hdrs_t *)packet;
-
-  memset( hdr->eth->dst, 0, 6UL );
-
-  memcpy( hdr->ip4->daddr_c, &dest->ip4, 4UL );
-  hdr->ip4->net_id     = fd_ushort_bswap( ctx->net_id++ );
-  hdr->ip4->check      = 0U;
-  hdr->ip4->check      = fd_ip4_hdr_check( ( fd_ip4_hdr_t const *) FD_ADDRESS_OF_PACKED_MEMBER( hdr->ip4 ) );
-
-  hdr->udp->net_dport  = fd_ushort_bswap( dest->port );
-
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
 
-  uchar buf[STL_MTU];
-  stl_s0_client_hs_t send_hs = {.session_id = {0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}};
-  ulong encoded_sz;
+  ulong pkt_sz;
   do {
-    long tmp = stl_s0_encode_appdata( &send_hs, (uchar*)shred, (ushort)shred_sz, buf);
-    if( tmp <= 0 ) {
-      FD_LOG_NOTICE(("TMP %ld LESS THAN 0", tmp));
-      return;
+    /* TODO - clean this dst handling */
+    stl_net_ctx_t dst;
+    dst.ip4 = dest->ip4;
+    dst.port = dest->port;
+    int tmp = fd_stl_send( &dst, shred, shred_sz, packet );
+    if( tmp<0 ) {
+      FD_LOG_NOTICE(("STL SEND ERROR: %d", tmp)); /* TODO remove this */
     }
-    encoded_sz = (ulong)tmp;
-  } while(0);
-
-  fd_memcpy( packet+sizeof(fd_net_hdrs_t), buf, encoded_sz );
-
-  ulong pkt_sz = encoded_sz + sizeof(fd_net_hdrs_t);
+    pkt_sz = (ulong)tmp;
+  } while (0);
 
   ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong   sig = fd_disco_netmux_sig( dest->ip4, dest->port, dest->ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
@@ -696,6 +656,33 @@ after_frag( fd_shred_ctx_t *    ctx,
   for( ulong i=0UL; i<k; i++ ) for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, new_shreds[ i ], sdest, dests[ j*out_stride+i ], ctx->tsorig );
 }
 
+
+static void
+shred_rx( fd_stl_t* stl,
+          stl_net_ctx_t* sender,
+          uchar const * data,
+          ulong         data_sz ) {
+  (void)sender;
+
+  fd_shred_ctx_t* ctx = stl->cb.stl_ctx;
+  fd_shred_t const * shred = fd_shred_parse( data, (ulong)data_sz );
+  if( FD_UNLIKELY( !shred ) ) {
+    ctx->skip_frag = 1;
+    return;
+  };
+  /* all shreds in the same FEC set will have the same signature
+      so we can round-robin shreds between the shred tiles based on
+      just the signature without splitting individual FEC sets. */
+  ulong sig = fd_ulong_load_8( shred->signature );
+  if( FD_LIKELY( sig%ctx->round_robin_cnt!=ctx->round_robin_id ) ) {
+    ctx->skip_frag = 1;
+    return;
+  }
+  fd_memcpy( ctx->shred_buffer, data, data_sz );
+  ctx->shred_buffer_sz = data_sz;
+}
+
+
 static void
 privileged_init( fd_topo_t *      topo,
                  fd_topo_tile_t * tile ) {
@@ -759,7 +746,8 @@ unprivileged_init( fd_topo_t *      topo,
                  required_dcache_sz ));
   }
 
-  if( FD_UNLIKELY( !tile->shred.fec_resolver_depth ) ) FD_LOG_ERR(( "fec_resolver_depth not set" ));
+  if( FD_UNLIKELY( !tile->shred.fec_resolver_depth
+  ) ) FD_LOG_ERR(( "fec_resolver_depth not set" ));
 
   uchar zero_mac_addr[6] = {0};
   if( FD_UNLIKELY( fd_memeq( tile->shred.src_mac_addr, zero_mac_addr, sizeof(zero_mac_addr ) ) ) ) FD_LOG_ERR(( "src_mac_addr not set" ));
@@ -771,6 +759,13 @@ unprivileged_init( fd_topo_t *      topo,
 
   if( FD_UNLIKELY( !bank_cnt && !replay_cnt ) ) FD_LOG_ERR(( "0 bank/replay tiles" ));
   if( FD_UNLIKELY( bank_cnt>MAX_BANK_CNT ) ) FD_LOG_ERR(( "Too many banks" ));
+
+  fd_stl_limits_t limits[1];
+  limits->conn_cnt = 0x1<<14; /* TODO - remove magic number */
+  fd_stl_t * stl = fd_stl_join( fd_stl_new( FD_SCRATCH_ALLOC_APPEND( l, fd_stl_align(), fd_stl_footprint( limits ) ), limits ) );
+
+  stl->cb.stl_ctx = ctx;
+  stl->cb.rx = shred_rx;
 
   void * _stake_ci = FD_SCRATCH_ALLOC_APPEND( l, fd_stake_ci_align(),              fd_stake_ci_footprint()            );
   void * _resolver = FD_SCRATCH_ALLOC_APPEND( l, fd_fec_resolver_align(),          fec_resolver_footprint             );

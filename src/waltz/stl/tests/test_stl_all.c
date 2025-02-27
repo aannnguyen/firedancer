@@ -22,22 +22,22 @@ wallclock( void ) {
 static void
 test_s0_handshake( void ) {
 
-  // uint8_t server_identity_seed[32]={0}; server_identity_seed[31] = 0x01;
-  // uint8_t client_identity_seed[32]={0}; client_identity_seed[31] = 0x81;
+  // uchar server_identity_seed[32]={0}; server_identity_seed[31] = 0x01;
+  // uchar client_identity_seed[32]={0}; client_identity_seed[31] = 0x81;
 
-  // uint8_t scratch[32];
+  // uchar scratch[32];
 
   stl_s0_server_params_t server = {0};
 
-  for( uint32_t i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
-    server.identity[i] = (uint8_t)(i&0xff);
+  for( uint i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
+    server.identity[i] = (uchar)(i&0xff);
   }
   server.cookie_secret[15] = 0x02;
   server.token[15] = 0x03; /* FIXME: shouldn't this be rng in stl_s0_server_handshake? */
 
   stl_s0_client_params_t client = {0};
-  for( uint32_t i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
-    server.identity[i] = (uint8_t)(i&0x7f);
+  for( uint i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
+    server.identity[i] = (uchar)(i&0x7f);
   }
   client.cookie_secret[15] = 0x12;
 
@@ -52,11 +52,11 @@ test_s0_handshake( void ) {
   client_addr.src_addr[15] = 0x21;
   client_addr.src_port     = 8001;
 
-  uint8_t client_pkt[ STL_MTU ];
-  uint8_t server_pkt[ STL_MTU ];
+  uchar client_pkt[ STL_MTU ];
+  uchar server_pkt[ STL_MTU ];
 
-  uint64_t client_pkt_sz;
-  uint64_t server_pkt_sz;
+  ulong client_pkt_sz;
+  ulong server_pkt_sz;
 
   client_pkt_sz = stl_s0_client_initial( &client, &client_hs, client_pkt );
   assert( client_pkt_sz>0UL );
@@ -80,13 +80,13 @@ test_s0_handshake( void ) {
 
   puts( "S0 handshake: OK" );
 
-  uint8_t payload[STL_BASIC_PAYLOAD_MTU]; /* FIXME: use the correct MTU here */
-  uint8_t rcv_payload[STL_BASIC_PAYLOAD_MTU];
-  uint16_t payload_sz = STL_BASIC_PAYLOAD_MTU;
-  int64_t rcv_payload_sz;
+  uchar payload[STL_BASIC_PAYLOAD_MTU]; /* FIXME: use the correct MTU here */
+  uchar rcv_payload[STL_BASIC_PAYLOAD_MTU];
+  ushort payload_sz = STL_BASIC_PAYLOAD_MTU;
+  long rcv_payload_sz;
 
-  for( uint16_t i=0; i<payload_sz; ++i ) {
-    payload[i] = (uint8_t)(i&0xff);
+  for( ushort i=0; i<payload_sz; ++i ) {
+    payload[i] = (uchar)(i&0xff);
   }
 
   /*
@@ -103,12 +103,12 @@ test_s0_handshake( void ) {
   }
   */
 
-  int64_t encoded_sz = stl_s0_encode_appdata(&client_hs, payload, payload_sz, client_pkt /*, config */);
+  long encoded_sz = stl_s0_encode_appdata(&client_hs, payload, payload_sz, client_pkt /*, config */);
   assert(encoded_sz > 0L);
 
   /* client_pkt to net tile -> client_pkt from net tile */
 
-  rcv_payload_sz = stl_s0_decode_appdata(&server_hs, client_pkt, (uint16_t)encoded_sz, rcv_payload);
+  rcv_payload_sz = stl_s0_decode_appdata(&server_hs, client_pkt, (ushort)encoded_sz, rcv_payload);
   assert(server_pkt_sz > 0UL);
   assert(rcv_payload_sz == payload_sz);
   assert(memcmp(rcv_payload, payload, (size_t)rcv_payload_sz) == 0);
@@ -120,8 +120,8 @@ static void
 bench_cookie( void ) {
 
   stl_cookie_claims_t const claims = {0};
-  uint8_t const cookie_secret[ STL_COOKIE_KEY_SZ ] = {0};
-  uint8_t cookie[32];
+  uchar const cookie_secret[ STL_COOKIE_KEY_SZ ] = {0};
+  uchar cookie[32];
 
   /* warmup */
   for( unsigned long rem=1000000UL; rem; rem-- ) {
@@ -151,8 +151,8 @@ static void
 bench_cookie_verify( void ) {
 
   stl_cookie_claims_t claims = {0};
-  uint8_t const cookie_secret[ STL_COOKIE_KEY_SZ ] = {0};
-  uint8_t cookie[32] = {0};
+  uchar const cookie_secret[ STL_COOKIE_KEY_SZ ] = {0};
+  uchar cookie[32] = {0};
 
   /* warmup */
   for( unsigned long rem=1000000UL; rem; rem-- ) {
