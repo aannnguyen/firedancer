@@ -326,11 +326,11 @@ stl_s0_encode_appdata( stl_s0_client_hs_t * hs,
                      const uint8_t *      payload, /* TODO: create a 0cp mode */
                      uint16_t             payload_sz,
                      uint8_t              pkt_out[ static STL_MTU ] ) {
-  if( hs->state != STL_TYPE_HS_SERVER_ACCEPT ) {
-    return -1; /* TODO - enumerate error codes */
-  } else if( payload_sz > STL_BASIC_PAYLOAD_MTU ) {
-    return -2;
-  }
+  // if( hs->state != STL_TYPE_HS_SERVER_ACCEPT ) {
+  //   return -1; /* TODO - enumerate error codes */
+  // } else if( payload_sz > STL_BASIC_PAYLOAD_MTU ) {
+  //   return -2;
+  // }
 
   uint8_t* ptr = pkt_out;
   *ptr = 0x1; /* version_type: version 0, type 1 */

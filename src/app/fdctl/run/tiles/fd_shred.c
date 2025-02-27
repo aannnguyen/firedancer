@@ -529,7 +529,10 @@ send_shred( fd_shred_ctx_t *      ctx,
   ulong encoded_sz;
   do {
     long tmp = stl_s0_encode_appdata( &send_hs, (uchar*)shred, (ushort)shred_sz, buf);
-    if( tmp <= 0 ) return;
+    if( tmp <= 0 ) {
+      FD_LOG_NOTICE(("TMP %ld LESS THAN 0", tmp));
+      return;
+    }
     encoded_sz = (ulong)tmp;
   } while(0);
 
