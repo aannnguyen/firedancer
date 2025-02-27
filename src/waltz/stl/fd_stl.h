@@ -32,6 +32,13 @@ typedef void
                     uchar const *    data,
                     ulong            data_sz );
 
+
+typedef void
+(* fd_stl_cb_tx_t)( fd_stl_t      *  stl,
+                    stl_net_ctx_t *  sockAddr,
+                    uchar const *    data,
+                    ulong            data_sz );
+
 struct fd_stl_callbacks {
   /* Function pointers to user callbacks */
 
@@ -39,6 +46,7 @@ struct fd_stl_callbacks {
                       for instance-wide callbacks */
 
   fd_stl_cb_rx_t                 rx;         /* non-NULL, with stream_ctx */
+  fd_stl_cb_tx_t                 tx; /* send on 'wire' */
 
   /* Clock source */
   fd_stl_now_t now;     /* non-NULL */
@@ -131,10 +139,10 @@ fd_stl_service_timers( fd_stl_t * stl );
     <0   one of FD_STL_SEND_ERR_{INVAL_STREAM,INVAL_CONN,AGAIN} */
 
 FD_STL_API int
-fd_stl_send( stl_net_ctx_t *  dst,
+fd_stl_send( fd_stl_t * stl,
+             stl_net_ctx_t *  dst,
              void const *     data,
-             ulong            data_sz,
-             uchar*           out_buf);
+             ulong            data_sz);
 
 
 /* TODO document this */

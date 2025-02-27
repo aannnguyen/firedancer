@@ -476,36 +476,21 @@ static inline void
 send_shred( fd_shred_ctx_t *      ctx,
             fd_shred_t const    * shred,
             fd_shred_dest_t     * sdest,
-            fd_shred_dest_idx_t   dest_idx,
-            ulong                 tsorig ) {
+            fd_shred_dest_idx_t   dest_idx) {
   fd_shred_dest_weighted_t * dest = fd_shred_dest_idx_to_dest( sdest, dest_idx );
 
   if( FD_UNLIKELY( !dest->ip4 ) ) return;
 
-  uchar * packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
-
   int is_data = fd_shred_type( shred->variant )==FD_SHRED_TYPE_MERKLE_DATA;
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
 
-  ulong pkt_sz;
-  do {
-    /* TODO - clean this dst handling */
-    stl_net_ctx_t dst;
-    dst.ip4 = dest->ip4;
-    dst.port = dest->port;
-    int tmp = fd_stl_send( &dst, shred, shred_sz, packet );
-    if( tmp<0 ) {
-      FD_LOG_NOTICE(("STL SEND ERROR: %d", tmp)); /* TODO remove this */
-    }
-    pkt_sz = (ulong)tmp;
-  } while (0);
-
-  ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
-  ulong   sig = fd_disco_netmux_sig( dest->ip4, dest->port, dest->ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
-  fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk,
-      pkt_sz, 0UL, tsorig, tspub );
-  ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
-  ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, pkt_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
+  stl_net_ctx_t dst;
+  dst.ip4 = dest->ip4;
+  dst.port = dest->port;
+  int tmp = fd_stl_send( ctx->stl, &dst, shred, shred_sz );
+  if( tmp<0 ) {
+    FD_LOG_NOTICE(("STL SEND ERROR: %d", tmp)); /* TODO remove this */
+  }
 }
 
 static void
@@ -575,7 +560,7 @@ after_frag( fd_shred_ctx_t *    ctx,
         fd_shred_dest_idx_t * dests = fd_shred_dest_compute_children( sdest, &shred, 1UL, _dests, 1UL, fanout, fanout, max_dest_cnt );
         if( FD_UNLIKELY( !dests ) ) break;
 
-        for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, *out_shred, sdest, dests[ j ], ctx->tsorig );
+        for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, *out_shred, sdest, dests[ j ] );
       } while( 0 );
     }
     if( FD_LIKELY( rv!=FD_FEC_RESOLVER_SHRED_COMPLETES ) ) return;
@@ -653,9 +638,8 @@ after_frag( fd_shred_ctx_t *    ctx,
   if( FD_UNLIKELY( !dests ) ) return;
 
   /* Send only the ones we didn't receive. */
-  for( ulong i=0UL; i<k; i++ ) for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, new_shreds[ i ], sdest, dests[ j*out_stride+i ], ctx->tsorig );
+  for( ulong i=0UL; i<k; i++ ) for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, new_shreds[ i ], sdest, dests[ j*out_stride+i ] );
 }
-
 
 static void
 shred_rx( fd_stl_t* stl,
@@ -682,6 +666,22 @@ shred_rx( fd_stl_t* stl,
   ctx->shred_buffer_sz = data_sz;
 }
 
+static void
+send_to_net( fd_stl_t * stl,
+             stl_net_ctx_t* dest,
+             uchar const* data,
+             ulong data_sz) {
+
+  fd_shred_ctx_t* ctx = stl->cb.stl_ctx;
+  uchar * packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
+  fd_memcpy( packet, data, data_sz );
+  ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+  ulong   sig = fd_disco_netmux_sig( dest->ip4, dest->port, dest->ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
+  fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk,
+      data_sz, 0UL, ctx->tsorig, tspub );
+  ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
+  ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, data_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
+}
 
 static void
 privileged_init( fd_topo_t *      topo,
@@ -766,6 +766,7 @@ unprivileged_init( fd_topo_t *      topo,
 
   stl->cb.stl_ctx = ctx;
   stl->cb.rx = shred_rx;
+  stl->cb.tx = send_to_net;
 
   void * _stake_ci = FD_SCRATCH_ALLOC_APPEND( l, fd_stake_ci_align(),              fd_stake_ci_footprint()            );
   void * _resolver = FD_SCRATCH_ALLOC_APPEND( l, fd_fec_resolver_align(),          fec_resolver_footprint             );
