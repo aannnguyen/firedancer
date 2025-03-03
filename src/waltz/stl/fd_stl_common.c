@@ -1,6 +1,5 @@
 #include "fd_stl_private.h"
 #include "../../ballet/siphash13/fd_siphash13.h"
-#include <sys/random.h>
 
 uchar *
 stl_cookie_create(uchar cookie[static STL_COOKIE_SZ],
@@ -29,8 +28,13 @@ int stl_cookie_verify(uchar const cookie[static STL_COOKIE_SZ],
 
 void stl_gen_session_id(uchar session_id[static STL_SESSION_ID_SZ])
 {
-  if (getrandom(session_id, STL_SESSION_ID_SZ, 0))
-  {
-    ;
+  static fd_rng_t _rng[1];
+  static int _done_init = 0;
+  if( !_done_init ) {
+    fd_rng_join( fd_rng_new( _rng, 3, 4 ) ); /* TODO - figure out correct args here */
+    _done_init = 1;
   }
+
+  ulong rnd_num = fd_rng_ulong( _rng );
+  memcpy( session_id, &rnd_num, STL_SESSION_ID_SZ );
 }

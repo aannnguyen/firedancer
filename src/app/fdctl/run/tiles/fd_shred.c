@@ -468,7 +468,17 @@ during_frag( fd_shred_ctx_t * ctx,
     uchar const * dcache_entry = (uchar const *)fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk ) + ctl;
     ulong hdr_sz = fd_disco_netmux_sig_hdr_sz( sig );
     FD_TEST( hdr_sz <= sz ); /* Should be ensured by the net tile */
-    fd_stl_process_packet(ctx->stl, dcache_entry+hdr_sz, sz-hdr_sz);
+
+    /* TODO can nettile somehow send src sock_addr ? */
+    const uchar *ip_hdr = dcache_entry + 14;
+    uchar ip_hdr_len = (ip_hdr[0] & 0x0F) * 4;
+    const uchar *udp_hdr = ip_hdr + ip_hdr_len;
+    ushort src_port = (ushort)udp_hdr[0] << 8 | udp_hdr[1];
+    uint src_ip = (uint)ip_hdr[12] | ((uint)ip_hdr[13] << 8) |
+                ((uint)ip_hdr[14] << 16) | ((uint)ip_hdr[15] << 24);
+    FD_LOG_NOTICE(("STL src ip: %u, src port: %hu", src_ip, src_port));
+
+    fd_stl_process_packet(ctx->stl, dcache_entry+hdr_sz, sz-hdr_sz, src_ip, src_port);
   }
 }
 
@@ -485,8 +495,8 @@ send_shred( fd_shred_ctx_t *      ctx,
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
 
   stl_net_ctx_t dst;
-  dst.ip4 = dest->ip4;
-  dst.port = dest->port;
+  dst.parts.ip4 = dest->ip4;
+  dst.parts.port = dest->port;
   int tmp = fd_stl_send( ctx->stl, &dst, shred, shred_sz );
   if( tmp<0 ) {
     FD_LOG_NOTICE(("STL SEND ERROR: %d", tmp)); /* TODO remove this */
@@ -676,7 +686,7 @@ send_to_net( fd_stl_t * stl,
   uchar * packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
   fd_memcpy( packet, data, data_sz );
   ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
-  ulong   sig = fd_disco_netmux_sig( dest->ip4, dest->port, dest->ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
+  ulong   sig = fd_disco_netmux_sig( dest->parts.ip4, dest->parts.port, dest->parts.ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
   fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk,
       data_sz, 0UL, ctx->tsorig, tspub );
   ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );

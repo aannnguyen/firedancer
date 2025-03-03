@@ -1,7 +1,11 @@
 #ifndef HEADER_fd_src_waltz_stl_fd_stl_h
 #define HEADER_fd_src_waltz_stl_fd_stl_h
 
+#include "fd_stl_base.h"
 #include "fd_stl_proto.h"
+#include "fd_stl_private.h"
+#include "fd_stl_s0_client.h"
+#include "fd_stl_s0_server.h"
 
 /* FD_STL_API marks public API declarations.  No-op for now. */
 #define FD_STL_API
@@ -62,6 +66,8 @@ struct fd_stl {
   fd_stl_limits_t    limits;  /* position-independent, persistent,    read only */
   fd_stl_callbacks_t cb;      /* position-dependent,   reset on join, writable pre init  */
 
+  fd_stl_s0_client_params_t client_params;
+  fd_stl_s0_server_params_t server_params;
   /* ... private variable-length structures follow ... */
 };
 
@@ -105,7 +111,7 @@ fd_stl_join( void * shstl );
    thread may write to the STL.  Exclusive rights get released when the
    thread exits or calls fd_stl_fini.
 
-   Requires valid configuration and external objects (aio, callbacks).
+   Requires valid configuration and external objects (callbacks).
    Returns given stl on success and NULL on failure (logs details).
    Performs various heap allocations and file system accesses such
    reading certs.  Reasons for failure include invalid config or
@@ -124,6 +130,7 @@ fd_stl_fini( fd_stl_t * stl );
 
 /* Service API ********************************************************/
 
+/* AMAN TODO - document this, and add it to the shred client */
 FD_STL_API int
 fd_stl_service_timers( fd_stl_t * stl );
 
@@ -150,7 +157,9 @@ fd_stl_send( fd_stl_t * stl,
 FD_STL_API void
 fd_stl_process_packet( fd_stl_t * stl,
                        const uchar *     data,
-                       ulong       data_sz );
+                       ulong       data_sz,
+                       uint          src_ip,
+                       ushort      src_port );
 
 FD_PROTOTYPES_END
 

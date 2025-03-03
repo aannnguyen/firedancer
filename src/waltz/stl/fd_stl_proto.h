@@ -64,6 +64,18 @@
 
 #define STL_BASIC_PAYLOAD_MTU (STL_MTU - STL_SESSION_ID_SZ - STL_MAC_SZ - 1)
 
+#define FD_STL_MAX_BUF (16UL)
+
+#define FD_STL_MAX_SESSION_TMP (16UL)
+
+
+struct fd_stl_payload {
+   ushort sz;
+   uchar data[STL_BASIC_PAYLOAD_MTU];
+};
+
+typedef struct fd_stl_payload fd_stl_payload_t;
+
 /* stl_hdr_t is the common STL header shared by all packets. */
 
 struct __attribute__((packed)) stl_hdr {
@@ -77,7 +89,6 @@ typedef struct stl_hdr stl_hdr_t;
 
 struct __attribute__((packed)) stl_hs_hdr {
   stl_hdr_t base;
-  ushort  suite;
   uchar   cookie[ STL_COOKIE_SZ ];
 };
 
@@ -179,26 +190,6 @@ union __attribute__((packed)) stl_s0_hs_pkt {
 };
 
 typedef union stl_s0_hs_pkt stl_s0_hs_pkt_t;
-
-
-/* Suite S1 structures ************************************************/
-
-/* stl_s1_app_hdr_t is the STL header of application encrypted packets
-   using STL_SUITE_S1. */
-
-struct __attribute__((packed)) stl_s1_app_hdr {
-  stl_hdr_t base;
-
-  uchar  mac_tag[STL_MAC_SZ];
-  uint seq_compact;
-};
-
-typedef struct stl_s1_app_hdr stl_s1_app_hdr_t;
-
-/* stl_s1_hs_pkt_t is the STL header of handshake packets using
-   STL_SUITE_S1. */
-
-typedef union stl_s0_hs_pkt stl_s1_hs_pkt_t;
 
 
 #endif /* HEADER_stl_proto_h */

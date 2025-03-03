@@ -3,9 +3,10 @@
 
 #include "fd_stl_base.h"
 #include "fd_stl_proto.h"
+#include "fd_stl_sesh.h"
 #include <stdbool.h>
 
-struct stl_s0_client_params {
+struct fd_stl_s0_client_params {
 
   /* identity is a compound structure of the identity private and
      public key */
@@ -17,44 +18,64 @@ struct stl_s0_client_params {
 
 };
 
-typedef struct stl_s0_client_params stl_s0_client_params_t;
+typedef struct fd_stl_s0_client_params fd_stl_s0_client_params_t;
 
 /* TODO: decouple handshake, connection, and client objects*/
-struct stl_s0_client_hs {
+struct fd_stl_s0_client_hs {
   uchar server_token[ STL_TOKEN_SZ ]; /* TODO: unnecessary? */
   uchar client_token[ STL_TOKEN_SZ ];
   // crypto_hash_sha256_state transcript;
   uchar state;
+  ulong socket_addr;
   uchar session_id[ STL_SESSION_ID_SZ ];
+  uchar _session_id_pad[1];
   uchar server_identity[ STL_EDBLAH_KEY_SZ ];
+  fd_stl_payload_t buffers[FD_STL_MAX_BUF];
+  uchar buffers_sz;
 };
 
-typedef struct stl_s0_client_hs stl_s0_client_hs_t;
+typedef struct fd_stl_s0_client_hs fd_stl_s0_client_hs_t;
 
 FD_PROTOTYPES_BEGIN
 
-stl_s0_client_hs_t *
-stl_s0_client_hs_new( void * hs );
+fd_stl_s0_client_hs_t *
+fd_stl_s0_client_hs_new( void * hs );
 
-ulong
-stl_s0_client_initial( stl_s0_client_params_t const * client,
-                       stl_s0_client_hs_t const *     hs,
+long
+fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
+                       fd_stl_s0_client_hs_t const *     hs,
                        uchar                        pkt_out[ static STL_MTU ] );
 
-ulong
-stl_s0_client_handshake( stl_s0_client_params_t const * client,
-                         stl_s0_client_hs_t *           hs,
-                         uchar const *                pkt_in,
-                         ulong                       pkt_in_sz,
-                         uchar                        pkt_out[ static STL_MTU ] );
+// long
+// fd_stl_s0_client_handshake( fd_stl_s0_client_params_t const * client,
+//                          fd_stl_s0_client_hs_t *           hs,
+//                          uchar const *                pkt_in,
+//                          ulong                       pkt_in_sz,
+//                          uchar                        pkt_out[ static STL_MTU ] );
+
+
+// TODO document
+long
+fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
+                               stl_s0_hs_pkt_t const *        pkt,
+                               uchar                        out[ STL_MTU ],
+                               fd_stl_s0_client_hs_t *           hs );
+
+// TODO document
+long
+fd_stl_s0_client_handle_accept( fd_stl_t* stl,
+                                stl_s0_hs_pkt_t const * pkt,
+                                uchar                  out[ STL_MTU ],
+                                fd_stl_s0_client_hs_t *    hs );
+
 
 /*
-  stl_s0_encode_appdata is a temporary function that encodes the payload into
+  fd_stl_s0_encode_appdata is a temporary function that encodes the payload into
   pkt_out using STL 0x1. It takes session details from hs. It returns the total
   number of bytes encoded, or a negative value for err
 */
 long
-stl_s0_encode_appdata( stl_s0_client_hs_t * hs,
+fd_stl_s0_encode_appdata( fd_stl_sesh_t * sesh,
                      const uchar *      payload, /* TODO: create a 0cp mode */
                      ushort             payload_sz,
                      uchar              pkt_out[ static STL_MTU ] );

@@ -2,7 +2,7 @@
 #define HEADER_stl_base_h
 
 #include "../../util/fd_util_base.h"
-
+#include "../../util/log/fd_log.h"
 
 /* Common structures **************************************************/
 
@@ -13,11 +13,22 @@
 typedef struct fd_stl fd_stl_t;
 typedef struct fd_stl_conn fd_stl_conn_t;
 
-struct __attribute__((packed)) stl_net_ctx {
-  uint  ip4; /* in host byte order */
-  ushort port;
+union stl_net_ctx {
+  struct __attribute__((packed)) stl_net_ctx_parts {
+    uint  ip4; /* in host byte order */
+    ushort port;
+    ushort padding;
+  } parts;
+
+  ulong b;
 };
 
-typedef struct stl_net_ctx stl_net_ctx_t;
+
+// struct __attribute__((packed)) stl_net_ctx {
+//   uint  ip4; /* in host byte order */
+//   ushort port;
+// };
+
+typedef union stl_net_ctx stl_net_ctx_t;
 
 #endif /* HEADER_stl_base_h */
