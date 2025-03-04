@@ -302,7 +302,7 @@ fd_stl_s0_client_handle_accept( fd_stl_t* stl,
   sesh->server = 0;
 
   uchar buf[STL_MTU];
-  stl_net_ctx_t sock_addr = {0};
+  stl_net_ctx_t sock_addr = FD_STL_NET_CTX_T_EMPTY;
   for (uchar i = 0; i < hs->buffers_sz; i++) {
     long sz = fd_stl_s0_encode_appdata( sesh, hs->buffers[i].data, hs->buffers[i].sz, buf );
     if (sz > 0) {
@@ -369,6 +369,7 @@ fd_stl_s0_decode_appdata( fd_stl_sesh_t* sesh,
                           const uchar* encoded_buf,
                           ushort encoded_sz,
                           uchar pkt_out[STL_BASIC_PAYLOAD_MTU]) {
+  (void)sesh;
   /* Check minimum packet size (version + session_id + MAC) */
   const ushort min_size = 1 + STL_SESSION_ID_SZ + STL_MAC_SZ;
   if( encoded_sz < min_size ) {
@@ -383,10 +384,6 @@ fd_stl_s0_decode_appdata( fd_stl_sesh_t* sesh,
 
   if( stl_hdr_type( hdr ) != STL_TYPE_APP_SIMPLE ) {
     return -3;
-  }
-
-  if( memcmp( hdr->session_id, (uchar*)&(sesh->session_id), STL_SESSION_ID_SZ ) != 0 ) {
-    return -4;
   }
 
   /* Verify MAC (currently fake in encode, so just check for 0xff) */

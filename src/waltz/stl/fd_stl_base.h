@@ -23,6 +23,7 @@ union stl_net_ctx {
   ulong b;
 };
 
+#define FD_STL_NET_CTX_T_EMPTY {.b = 0UL}
 
 // struct __attribute__((packed)) stl_net_ctx {
 //   uint  ip4; /* in host byte order */

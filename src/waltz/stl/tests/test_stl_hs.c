@@ -27,7 +27,7 @@ test_s0_handshake( void ) {
 
   // uchar scratch[32];
 
-  stl_s0_server_params_t server = {0};
+  fd_stl_s0_server_params_t server = {0};
 
   for( uint i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
     server.identity[i] = (uchar)(i&0xff);
@@ -35,47 +35,47 @@ test_s0_handshake( void ) {
   server.cookie_secret[15] = 0x02;
   server.token[15] = 0x03; /* FIXME: shouldn't this be rng in stl_s0_server_handshake? */
 
-  stl_s0_client_params_t client = {0};
+  fd_stl_s0_client_params_t client = {0};
   for( uint i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
     server.identity[i] = (uchar)(i&0x7f);
   }
   client.cookie_secret[15] = 0x12;
 
-  stl_s0_server_hs_t server_hs = {0};
-  stl_s0_client_hs_t client_hs; stl_s0_client_hs_new( &client_hs );
+  fd_stl_s0_server_hs_t server_hs = {0};
+  fd_stl_s0_client_hs_t client_hs; fd_stl_s0_client_hs_new( &client_hs );
 
   /* FIXME: create fn to init with server identity and gen token */
   memcpy( client_hs.server_identity, server.identity, STL_EDBLAH_KEY_SZ );
   client_hs.client_token[15] = 0x13;
 
-  stl_net_ctx_t client_addr = {0};
-  client_addr.src_addr[15] = 0x21;
-  client_addr.src_port     = 8001;
+  stl_net_ctx_t client_addr = FD_STL_NET_CTX_T_EMPTY;
+  client_addr.parts.ip4 = 0x21;
+  client_addr.parts.port = 8001;
 
   uchar client_pkt[ STL_MTU ];
   uchar server_pkt[ STL_MTU ];
 
-  ulong client_pkt_sz;
-  ulong server_pkt_sz;
+  long client_pkt_sz;
+  long server_pkt_sz;
 
-  client_pkt_sz = stl_s0_client_initial( &client, &client_hs, client_pkt );
-  assert( client_pkt_sz>0UL );
+  client_pkt_sz = fd_stl_s0_client_initial( &client, &client_hs, client_pkt );
+  assert( client_pkt_sz>0L );
   assert( client_hs.state == STL_TYPE_HS_CLIENT_INITIAL );
 
-  server_pkt_sz = stl_s0_server_handshake( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
-  assert( server_pkt_sz>0UL );
+  server_pkt_sz = fd_stl_s0_server_handle_initial( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
+  assert( server_pkt_sz>0L );
   assert( !server_hs.done );
 
-  client_pkt_sz = stl_s0_client_handshake( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
-  assert( client_pkt_sz>0UL );
+  client_pkt_sz = fd_stl_s0_client_handle_continue( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
+  assert( client_pkt_sz>0L );
   assert( client_hs.state == STL_TYPE_HS_SERVER_CONTINUE );
 
-  server_pkt_sz = stl_s0_server_handshake( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
-  assert( server_pkt_sz>0UL );
+  server_pkt_sz = fd_stl_s0_server_handle_accept( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
+  assert( server_pkt_sz>0L );
   assert( server_hs.done );
 
-  client_pkt_sz = stl_s0_client_handshake( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
-  assert( client_pkt_sz==0UL ); /* FIXME: 0 should not be both error and success */
+  client_pkt_sz = fd_stl_s0_client_handle_accept( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
+  assert( client_pkt_sz==0L ); /* FIXME: 0 should not be both error and success */
   assert( client_hs.state == STL_TYPE_HS_SERVER_ACCEPT );
 
   puts( "S0 handshake: OK" );
@@ -103,12 +103,12 @@ test_s0_handshake( void ) {
   }
   */
 
-  long encoded_sz = stl_s0_encode_appdata(&client_hs, payload, payload_sz, client_pkt /*, config */);
+  long encoded_sz = fd_stl_s0_encode_appdata(&client_hs, payload, payload_sz, client_pkt /*, config */);
   assert(encoded_sz > 0L);
 
   /* client_pkt to net tile -> client_pkt from net tile */
 
-  rcv_payload_sz = stl_s0_decode_appdata(&server_hs, client_pkt, (ushort)encoded_sz, rcv_payload);
+  rcv_payload_sz = fd_stl_s0_decode_appdata(&server_hs, client_pkt, (ushort)encoded_sz, rcv_payload);
   assert(server_pkt_sz > 0UL);
   assert(rcv_payload_sz == payload_sz);
   assert(memcmp(rcv_payload, payload, (size_t)rcv_payload_sz) == 0);

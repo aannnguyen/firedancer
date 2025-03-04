@@ -159,7 +159,7 @@ fd_stl_process_packet( fd_stl_t *     stl,
   /* AMAN TODO - implement me */
 
   /* Create network context for the sender */
-  stl_net_ctx_t sender;
+  stl_net_ctx_t sender = FD_STL_NET_CTX_T_EMPTY;
   sender.parts.ip4 = src_ip;
   sender.parts.port = src_port;
 
@@ -188,6 +188,13 @@ fd_stl_process_packet( fd_stl_t *     stl,
     }
 
     fd_stl_sesh_t* sesh = priv->sessions + i;
+
+    /* check that the session IP and incoming IP match */
+    if( sesh->socket_addr != sender.b ) {
+      FD_LOG_ERR(("STL session IP mismatch"));
+      return;
+    }
+
     long rec_sz = fd_stl_s0_decode_appdata( sesh, data, (ushort)data_sz, buf );
     if( rec_sz < 0 ) {
       FD_LOG_ERR(("STL decode appdata failed"));

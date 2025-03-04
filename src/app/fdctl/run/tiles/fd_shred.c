@@ -500,7 +500,7 @@ send_shred( fd_shred_ctx_t *      ctx,
   int is_data = fd_shred_type( shred->variant )==FD_SHRED_TYPE_MERKLE_DATA;
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
 
-  stl_net_ctx_t dst;
+  stl_net_ctx_t dst = FD_STL_NET_CTX_T_EMPTY;
   dst.parts.ip4 = dest->ip4;
   dst.parts.port = dest->port;
   int tmp = fd_stl_send( ctx->stl, &dst, shred, shred_sz );
