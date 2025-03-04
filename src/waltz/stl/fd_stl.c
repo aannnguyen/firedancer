@@ -187,8 +187,8 @@ fd_stl_process_packet( fd_stl_t *     stl,
       return;
     }
 
-    fd_stl_s0_server_hs_t* hs = priv->server_hs + i;
-    long rec_sz = fd_stl_s0_decode_appdata( hs, data, (ushort)data_sz, buf );
+    fd_stl_sesh_t* sesh = priv->sessions + i;
+    long rec_sz = fd_stl_s0_decode_appdata( sesh, data, (ushort)data_sz, buf );
     if( rec_sz < 0 ) {
       FD_LOG_ERR(("STL decode appdata failed"));
       return;

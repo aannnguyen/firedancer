@@ -365,42 +365,43 @@ fd_stl_s0_encode_appdata( fd_stl_sesh_t * sesh,
 }
 
 long
-fd_stl_s0_decode_appdata(fd_stl_s0_server_hs_t* hs,
-                      const uchar* encoded_buf,
-                      ushort encoded_sz,
-                      uchar pkt_out[STL_BASIC_PAYLOAD_MTU]) {
+fd_stl_s0_decode_appdata( fd_stl_sesh_t* sesh,
+                          const uchar* encoded_buf,
+                          ushort encoded_sz,
+                          uchar pkt_out[STL_BASIC_PAYLOAD_MTU]) {
   /* Check minimum packet size (version + session_id + MAC) */
   const ushort min_size = 1 + STL_SESSION_ID_SZ + STL_MAC_SZ;
   if( encoded_sz < min_size ) {
       return -1;
   }
 
-  const uchar* ptr = encoded_buf;
+  stl_hdr_t* hdr = (stl_hdr_t*)encoded_buf;
 
-  /* Check version and type */
-  if( *ptr != 0x1 ) { // version 0, type 1
-      return -2;
+  if( stl_hdr_version( hdr ) != STL_V0 ) {
+    return -2;
   }
-  ptr += 1;
 
-  /* Verify session id */
-  if( memcmp( ptr, hs->session_id, STL_SESSION_ID_SZ ) != 0 ) {
-      return -3;
+  if( stl_hdr_type( hdr ) != STL_TYPE_APP_SIMPLE ) {
+    return -3;
   }
-  ptr += STL_SESSION_ID_SZ;
+
+  if( memcmp( hdr->session_id, (uchar*)&(sesh->session_id), STL_SESSION_ID_SZ ) != 0 ) {
+    return -4;
+  }
 
   /* Verify MAC (currently fake in encode, so just check for 0xff) */
   const uchar* mac_ptr = encoded_buf + encoded_sz - STL_MAC_SZ;
   for( ulong i=0; i<STL_MAC_SZ; i++ ) {
       if( mac_ptr[i]!= 0xff ) {
-          return -4;
+          return -5;
       }
   }
 
   /* Calculate payload size (everything after headers) */
-  long read_sz = mac_ptr - ptr;
+  hdr++;
+  long read_sz = (long)mac_ptr - (long)hdr;
   if( read_sz > 0)
-    fd_memcpy( pkt_out, ptr, (size_t)read_sz );
+    fd_memcpy( pkt_out, hdr, (size_t)read_sz );
 
   return read_sz;
 }

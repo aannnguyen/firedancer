@@ -71,10 +71,10 @@ fd_stl_s0_server_rotate_keys( fd_stl_s0_server_params_t * server );
    takes encoded_buf off the wire and decodes it
    into pkt_out */
 long
-fd_stl_s0_decode_appdata( fd_stl_s0_server_hs_t* hs,
-                       const uchar* encoded_buf,
-                       ushort encoded_sz,
-                       uchar  pkt_out[static STL_BASIC_PAYLOAD_MTU] );
+fd_stl_s0_decode_appdata( fd_stl_sesh_t* sesh,
+                          const uchar* encoded_buf,
+                          ushort encoded_sz,
+                          uchar  pkt_out[static STL_BASIC_PAYLOAD_MTU] );
                        /* FIX ME get rid of static keyword in buf allocs */
 
 FD_PROTOTYPES_END

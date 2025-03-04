@@ -226,12 +226,17 @@ scratch_footprint( fd_topo_tile_t const * tile ) {
                                                             128UL * tile->shred.fec_resolver_depth );
   ulong fec_set_cnt = tile->shred.depth + tile->shred.fec_resolver_depth + 4UL;
 
+  fd_stl_limits_t limits = {
+    .conn_cnt = 8
+  };
+
   ulong l = FD_LAYOUT_INIT;
   l = FD_LAYOUT_APPEND( l, alignof(fd_shred_ctx_t),          sizeof(fd_shred_ctx_t)                  );
   l = FD_LAYOUT_APPEND( l, fd_stake_ci_align(),              fd_stake_ci_footprint()                 );
   l = FD_LAYOUT_APPEND( l, fd_fec_resolver_align(),          fec_resolver_footprint                  );
   l = FD_LAYOUT_APPEND( l, fd_shredder_align(),              fd_shredder_footprint()                 );
   l = FD_LAYOUT_APPEND( l, alignof(fd_fec_set_t),            sizeof(fd_fec_set_t)*fec_set_cnt        );
+  l = FD_LAYOUT_APPEND( l, fd_stl_align(),                   fd_stl_footprint( &limits )             );
   return FD_LAYOUT_FINI( l, scratch_align() );
 }
 
@@ -791,17 +796,18 @@ unprivileged_init( fd_topo_t *      topo,
   if( FD_UNLIKELY( bank_cnt>MAX_BANK_CNT ) ) FD_LOG_ERR(( "Too many banks" ));
 
   fd_stl_limits_t limits[1];
-  limits->conn_cnt = 0x1<<14; /* TODO - remove magic number */
-  fd_stl_t * stl = fd_stl_join( fd_stl_new( FD_SCRATCH_ALLOC_APPEND( l, fd_stl_align(), fd_stl_footprint( limits ) ), limits ) );
-
-  stl->cb.stl_ctx = ctx;
-  stl->cb.rx = shred_rx;
-  stl->cb.tx = send_to_net;
+  limits->conn_cnt = 0x8; /* TODO - remove magic number */
 
   void * _stake_ci = FD_SCRATCH_ALLOC_APPEND( l, fd_stake_ci_align(),              fd_stake_ci_footprint()            );
   void * _resolver = FD_SCRATCH_ALLOC_APPEND( l, fd_fec_resolver_align(),          fec_resolver_footprint             );
   void * _shredder = FD_SCRATCH_ALLOC_APPEND( l, fd_shredder_align(),              fd_shredder_footprint()            );
   void * _fec_sets = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_fec_set_t),            sizeof(fd_fec_set_t)*fec_set_cnt   );
+  void * _stl      = FD_SCRATCH_ALLOC_APPEND( l, fd_stl_align(),                   fd_stl_footprint( limits )         );
+
+  fd_stl_t * stl = fd_stl_join( fd_stl_new( _stl, limits ) );
+  stl->cb.stl_ctx = ctx;
+  stl->cb.rx = shred_rx;
+  stl->cb.tx = send_to_net;
 
   fd_fec_set_t * fec_sets = (fd_fec_set_t *)_fec_sets;
   fd_shred34_t * shred34  = (fd_shred34_t *)store_out_dcache;
@@ -868,6 +874,7 @@ unprivileged_init( fd_topo_t *      topo,
 
   ctx->shred34  = shred34;
   ctx->fec_sets = fec_sets;
+  ctx->stl      = stl;
 
   ctx->stake_ci = fd_stake_ci_join( fd_stake_ci_new( _stake_ci, ctx->identity_key ) );
 
