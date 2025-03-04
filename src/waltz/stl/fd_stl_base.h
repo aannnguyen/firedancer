@@ -15,7 +15,7 @@ typedef struct fd_stl_conn fd_stl_conn_t;
 
 union stl_net_ctx {
   struct __attribute__((packed)) stl_net_ctx_parts {
-    uint  ip4; /* in host byte order */
+    uint  ip4;
     ushort port;
     ushort padding;
   } parts;

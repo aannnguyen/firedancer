@@ -2,36 +2,74 @@
 
 ulong
 fd_stl_footprint( fd_stl_limits_t const * limits ) {
-  /* AMAN TODO - implement me */
+  /* AMAN TODO - revisit impl to use limits */
   (void)limits;
-  return 0xff;
+  return sizeof(fd_stl_t) + sizeof(fd_stl_state_private_t);
+}
+
+static ulong
+fd_stl_clock_wallclock( void * ctx FD_PARAM_UNUSED ) {
+  return (ulong)fd_log_wallclock();
 }
 
 void *
 fd_stl_new( void* mem,
             fd_stl_limits_t const * limits ) {
-  /* AMAN TODO - implement me */
-  (void)limits;
+  if( FD_UNLIKELY( !mem ) ) return NULL;
+  if( FD_UNLIKELY( !limits ) ) return NULL;
 
-  return mem;
+  ulong align = fd_stl_align();
+  if( FD_UNLIKELY( !fd_ulong_is_aligned( (ulong)mem, align ) ) ) return NULL;
+
+  if( FD_UNLIKELY( limits->conn_cnt == 0UL ) ) {
+    FD_LOG_WARNING(( "invalid limits" ));
+    return NULL;
+  }
+
+  /* Zero the entire memory region */
+  fd_stl_t * stl = (fd_stl_t *)mem;
+  memset( stl, 0, fd_stl_footprint(limits) );
+
+  /* default timing equipment */
+  stl->cb.now = fd_stl_clock_wallclock;
+  stl->cb.now_ctx = NULL;
+
+  /* Store the limits */
+  stl->limits = *limits;
+
+  /* Initialize private data */
+  fd_stl_state_private_t* priv = (fd_stl_state_private_t*)(stl+1);
+
+  /* Initialize session arrays */
+  priv->session_sz = 0;
+  priv->client_hs_sz = 0;
+  priv->server_hs_sz = 0;
+  fd_rng_join( fd_rng_new( priv->_rng, 32, 44 ) );
+
+  /* Set magic number to indicate successful initialization */
+  FD_COMPILER_MFENCE();
+  stl->magic = FD_STL_MAGIC;
+  FD_COMPILER_MFENCE();
+
+  return stl;
 }
 
 fd_stl_t *
 fd_stl_join( void* shstl ) {
-  /* AMAN TODO - implement me */
+  /* AMAN TODO - revisit impl? */
   return shstl;
 }
 
 
 fd_stl_t *
 fd_stl_init( fd_stl_t* stl ) {
-  /* AMAN TODO - implement me */
+  /* AMAN TODO - revisit impl? */
   return stl;
 }
 
 fd_stl_t *
 fd_stl_fini( fd_stl_t* stl ) {
-  /* AMAN TODO - implement me */
+  /* AMAN TODO - revisit impl? */
   return stl;
 }
 
@@ -62,7 +100,7 @@ fd_stl_send( fd_stl_t * stl,
     }
   }
   uchar buf[STL_MTU];
-  long sz;
+  long sz = 0;
   if( i < FD_STL_MAX_SESSION_TMP ) {
     /* we have a connection, just send on it */
     sz = fd_stl_s0_encode_appdata( priv->sessions+i, data, (ushort)data_sz, buf );
@@ -71,24 +109,43 @@ fd_stl_send( fd_stl_t * stl,
       return -2;
     }
   } else {
-    /* init hs */
-    if( priv->session_sz >= FD_STL_MAX_SESSION_TMP ) {
-      FD_LOG_NOTICE(("STL session overflow")); /* TODO - change this */
+
+    fd_stl_s0_client_hs_t* hs = NULL;
+    for( i=0; i<priv->client_hs_sz; ++i ) {
+      if( priv->client_hs[i].socket_addr == dst->b ) {
+        hs = priv->client_hs + i;
+        break;
+      }
     }
 
-    fd_stl_s0_client_hs_t* hs = priv->client_hs + priv->client_hs_sz++;
-    fd_stl_s0_client_hs_new( hs );
+    /* no pending hs, start one */
+    if( !hs ) {
+      if( priv->session_sz >= FD_STL_MAX_SESSION_TMP ) {
+        FD_LOG_NOTICE(("STL session overflow")); /* TODO - change this */
+      }
 
-    fd_stl_s0_client_params_t params[1];
-    sz = fd_stl_s0_client_initial( params , hs, buf );
+      hs = priv->client_hs + priv->client_hs_sz++;
+      fd_stl_s0_client_hs_new( hs );
+      hs->socket_addr = dst->b;
+
+      fd_stl_s0_client_params_t params[1];
+      sz = fd_stl_s0_client_initial( params , hs, buf );
+    }
 
     /* buffer data */
+    if( hs->buffers_sz >= FD_STL_MAX_BUF ) {
+      FD_LOG_ERR(("STL buffer overflow")); /* TODO - change this */
+      return -3;
+    }
+    
     fd_stl_payload_t* payload_buf = hs->buffers + hs->buffers_sz++;
     payload_buf->sz = (ushort)data_sz;
     fd_memcpy( payload_buf->data, data, data_sz );
   }
 
-  stl->cb.tx( stl, dst, buf, (ulong)sz );
+  if( sz > 0 ) {
+    stl->cb.tx( stl, dst, buf, (ulong)sz );
+  }
   return 0;
 }
 
@@ -161,11 +218,13 @@ fd_stl_process_packet( fd_stl_t *     stl,
       return;
     }
     fd_stl_s0_server_hs_t* hs = priv->server_hs + i;
+    fd_stl_sesh_t* sesh = priv->sessions + priv->session_sz++;
     send_sz = fd_stl_s0_server_handle_accept( &stl->server_params,
                                           &sender,
                                           pkt,
                                           buf,
-                                          hs );
+                                          hs,
+                                          sesh );
     if( send_sz < 0 ) {
       FD_LOG_ERR(("STL server handle accept failed"));
       return;
@@ -173,7 +232,7 @@ fd_stl_process_packet( fd_stl_t *     stl,
   } else if( FD_UNLIKELY( type == STL_TYPE_HS_SERVER_CONTINUE ) ) {
     ushort i;
     for( i=0; i<priv->client_hs_sz; ++i ) {
-      if( memcmp( priv->client_hs[i].session_id, pkt->hs.base.session_id, STL_SESSION_ID_SZ ) == 0 ) {
+      if( priv->client_hs[i].socket_addr == sender.b ) {
         break;
       }
     }
@@ -194,12 +253,12 @@ fd_stl_process_packet( fd_stl_t *     stl,
   } else if( FD_UNLIKELY( type == STL_TYPE_HS_SERVER_ACCEPT ) ) {
     ushort i;
     for( i=0; i<priv->client_hs_sz; ++i ) {
-      if( memcmp( priv->client_hs[i].session_id, pkt->hs.base.session_id, STL_SESSION_ID_SZ ) == 0 ) {
+      if( priv->client_hs[i].socket_addr == sender.b ) {
         break;
       }
     }
     if( i == priv->client_hs_sz ) {
-      FD_LOG_ERR(("STL client hs not found"));
+      FD_LOG_HEXDUMP_ERR(("STL client hs not found for session id:", pkt->hs.base.session_id, STL_SESSION_ID_SZ));
       return;
     }
     fd_stl_s0_client_hs_t* hs = priv->client_hs + i;
@@ -215,7 +274,7 @@ fd_stl_process_packet( fd_stl_t *     stl,
     FD_LOG_NOTICE(("stl_process_packet: Unknown hdr type %d", type));
   }
   if( send_sz > 0 ) {
-    stl->cb.rx( stl, &sender, buf, (ulong)send_sz );
+    stl->cb.tx( stl, &sender, buf, (ulong)send_sz );
   }
 }
 

@@ -50,7 +50,7 @@ struct fd_stl_callbacks {
                       for instance-wide callbacks */
 
   fd_stl_cb_rx_t                 rx;         /* non-NULL, with stream_ctx */
-  fd_stl_cb_tx_t                 tx; /* send on 'wire' */
+  fd_stl_cb_tx_t                 tx; /* sends UDP payload, handle rest in callback */
 
   /* Clock source */
   fd_stl_now_t now;     /* non-NULL */
@@ -63,8 +63,8 @@ typedef struct fd_stl_callbacks fd_stl_callbacks_t;
 struct fd_stl {
   ulong magic;   /* ==FD_QUIC_MAGIC */
 
-  fd_stl_limits_t    limits;  /* position-independent, persistent,    read only */
-  fd_stl_callbacks_t cb;      /* position-dependent,   reset on join, writable pre init  */
+  fd_stl_limits_t    limits;
+  fd_stl_callbacks_t cb;
 
   fd_stl_s0_client_params_t client_params;
   fd_stl_s0_server_params_t server_params;
@@ -75,9 +75,9 @@ FD_PROTOTYPES_BEGIN
 
 /* construction API */
 
-FD_STL_API FD_FN_CONST inline ulong
+FD_STL_API static FD_FN_CONST inline ulong
 fd_stl_align( void ) {
-  return 4096; /* TODO - using same as quic for now, reason through and fix later */
+  return 8; /* TODO - reason through and fix later */
 }
 
 FD_STL_API ulong

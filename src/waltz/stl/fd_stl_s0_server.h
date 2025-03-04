@@ -5,7 +5,7 @@
 
 #include "fd_stl_base.h"
 #include "fd_stl_proto.h"
-
+#include "fd_stl_sesh.h"
 struct fd_stl_s0_server_params {
 
   /* identity is a compound structure of the identity private and
@@ -55,7 +55,8 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
                              stl_net_ctx_t const *          ctx,
                              stl_s0_hs_pkt_t const *        pkt,
                              uchar                        out[ STL_MTU ],
-                             fd_stl_s0_server_hs_t *           hs );
+                             fd_stl_s0_server_hs_t *           hs,
+                             fd_stl_sesh_t * sesh );
 
 
 /* fd_stl_s0_server_rotate_keys re-generates the ephemeral keys

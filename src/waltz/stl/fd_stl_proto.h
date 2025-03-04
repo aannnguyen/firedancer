@@ -64,9 +64,11 @@
 
 #define STL_BASIC_PAYLOAD_MTU (STL_MTU - STL_SESSION_ID_SZ - STL_MAC_SZ - 1)
 
-#define FD_STL_MAX_BUF (16UL)
+#define FD_STL_MAX_BUF (2UL)
 
-#define FD_STL_MAX_SESSION_TMP (16UL)
+#define FD_STL_MAX_SESSION_TMP (3)
+
+#define FD_STL_MAGIC (0xdeadbeeffeebdaedUL)
 
 
 struct fd_stl_payload {

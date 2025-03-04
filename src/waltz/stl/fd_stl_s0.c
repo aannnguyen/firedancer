@@ -58,7 +58,8 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
                              stl_net_ctx_t const *          ctx,
                              stl_s0_hs_pkt_t const *        pkt,
                              uchar                        out[ STL_MTU ],
-                             fd_stl_s0_server_hs_t *           hs ) {
+                             fd_stl_s0_server_hs_t *           hs,
+                             fd_stl_sesh_t * sesh ) {
 
   /* Verify the SYN cookie */
 
@@ -134,6 +135,10 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
   hs->done = 1;
   fd_memcpy( hs->session_id, session_id, STL_SESSION_ID_SZ );
   fd_memcpy( &hs->identity, pkt->identity, STL_COOKIE_KEY_SZ );
+
+  sesh->session_id = FD_LOAD( ulong, hs->session_id );
+  sesh->socket_addr = ctx->b;
+  sesh->server = 1;
 
   return sizeof(stl_s0_hs_pkt_t);
 }
@@ -353,7 +358,7 @@ fd_stl_s0_encode_appdata( fd_stl_sesh_t * sesh,
   payload_ptr += payload_sz;
 
   /* append some fake MAC */
-  fd_memset( ptr, 0xff, STL_MAC_SZ);
+  fd_memset( payload_ptr, 0xff, STL_MAC_SZ);
   payload_ptr += STL_MAC_SZ;
 
   return payload_ptr-pkt_out;

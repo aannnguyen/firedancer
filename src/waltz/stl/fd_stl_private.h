@@ -53,12 +53,12 @@ _Static_assert( sizeof(stl_cookie_claims_t) == STL_COOKIE_CLAIMS_B_SZ,
 
 /* TODO - 16 alignment copied from quic, does it make sense? */
 struct __attribute__((aligned(16UL))) fd_stl_state_private {
-//   fd_stl_sesh_map_t *    sesh_map;       /* map session ids -> sessions */
-  // add a session pool
+//TODO    fd_stl_sesh_map_t *    sesh_map;       /* map session ids -> sessions */
+  // TODO add a session pool
   fd_stl_sesh_t sessions[FD_STL_MAX_SESSION_TMP];
   uchar session_sz;
 
-  // add a handshake pool
+  // TODO add a handshake pool
   fd_stl_s0_server_hs_t server_hs[FD_STL_MAX_SESSION_TMP];
   uchar server_hs_sz;
 

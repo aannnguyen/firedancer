@@ -9,7 +9,6 @@ struct fd_stl_sesh {
   int server; /* bool */
   ulong next;
 
-  
 };
 
 typedef struct fd_stl_sesh fd_stl_sesh_t;

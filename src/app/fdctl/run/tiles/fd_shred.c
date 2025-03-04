@@ -129,6 +129,7 @@ typedef struct {
   fd_keyguard_client_t keyguard_client[1];
 
   uint                 src_ip_addr;
+  ushort               src_port;
   uchar                src_mac_addr[ 6 ];
 
   /* shred34 and fec_sets are very related: fec_sets[i] has pointers
@@ -682,15 +683,34 @@ send_to_net( fd_stl_t * stl,
              uchar const* data,
              ulong data_sz) {
 
-  fd_shred_ctx_t* ctx = stl->cb.stl_ctx;
+  fd_shred_ctx_t * ctx = stl->cb.stl_ctx;
   uchar * packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
-  fd_memcpy( packet, data, data_sz );
+  fd_net_hdrs_t tmpl[1];
+  fd_net_create_packet_header_template( tmpl, data_sz, ctx->src_ip_addr, ctx->src_mac_addr, ctx->src_port );
+
+  fd_memcpy( packet, tmpl, sizeof(fd_net_hdrs_t) );
+
+  fd_net_hdrs_t * hdr = (fd_net_hdrs_t *)packet;
+
+  memset( hdr->eth->dst, 0, 6UL );
+
+  memcpy( hdr->ip4->daddr_c, &dest->parts.ip4, 4UL );
+  hdr->ip4->net_id     = fd_ushort_bswap( ctx->net_id++ );
+  hdr->ip4->check      = 0U;
+  hdr->ip4->check      = fd_ip4_hdr_check( ( fd_ip4_hdr_t const *) FD_ADDRESS_OF_PACKED_MEMBER( hdr->ip4 ) );
+
+  hdr->udp->net_dport  = fd_ushort_bswap( dest->parts.port );
+
+  fd_memcpy( packet+sizeof(fd_net_hdrs_t), data, data_sz );
+
+  ulong pkt_sz = data_sz + sizeof(fd_net_hdrs_t);
+
   ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong   sig = fd_disco_netmux_sig( dest->parts.ip4, dest->parts.port, dest->parts.ip4, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
   fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk,
-      data_sz, 0UL, ctx->tsorig, tspub );
+      pkt_sz, 0UL, ctx->tsorig, tspub );
   ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
-  ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, data_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
+  ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, pkt_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
 }
 
 static void
@@ -901,6 +921,7 @@ unprivileged_init( fd_topo_t *      topo,
   fd_memset( ctx->shred_buffer, 0xFF, FD_NET_MTU );
 
   ctx->src_ip_addr = tile->shred.ip_addr;
+  ctx->src_port    = tile->shred.shred_listen_port;
   fd_memcpy( ctx->src_mac_addr, tile->shred.src_mac_addr, 6UL );
 
   fd_histf_join( fd_histf_new( ctx->metrics->contact_info_cnt,     FD_MHIST_MIN(         SHRED, CLUSTER_CONTACT_INFO_CNT   ),
