@@ -45,20 +45,17 @@ fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
                           fd_stl_s0_client_hs_t *           hs,
                           uchar                             pkt_out[ STL_MTU ] );
 
-// long
-// fd_stl_s0_client_handshake( fd_stl_s0_client_params_t const * client,
-//                          fd_stl_s0_client_hs_t *           hs,
-//                          uchar const *                pkt_in,
-//                          ulong                       pkt_in_sz,
-//                          uchar                        pkt_out[ static STL_MTU ] );
-
-
 // TODO document
 long
 fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
-                               stl_s0_hs_pkt_t const *        pkt,
-                               uchar                        out[ STL_MTU ],
-                               fd_stl_s0_client_hs_t *           hs );
+                                  stl_s0_hs_pkt_t const *           pkt,
+                                  uchar                             out[ STL_MTU ],
+                                  uchar                             to_sign[32],
+                                  fd_stl_s0_client_hs_t *           hs );
+
+void
+fd_stl_s0_client_handle_continue_add_signature( uchar out[ STL_MTU ], 
+                                                uchar sig[ 64 ] );
 
 // TODO document
 long
@@ -82,7 +79,7 @@ long
 fd_stl_s0_encode_appdata( fd_stl_sesh_t * sesh,
                      const uchar *      payload, /* TODO: create a 0cp mode */
                      ushort             payload_sz,
-                     uchar              pkt_out[ static STL_MTU ] );
+                     uchar              pkt_out[ STL_MTU ] );
 
 FD_PROTOTYPES_END
 

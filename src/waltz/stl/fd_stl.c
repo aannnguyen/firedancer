@@ -227,10 +227,12 @@ fd_stl_process_packet( fd_stl_t *     stl,
     }
     fd_stl_s0_server_hs_t* hs = priv->server_hs + i;
     fd_stl_sesh_t* sesh = priv->sessions + priv->session_sz++;
+    uchar to_sign[32]; //FIXME: need to sign this
     send_sz = fd_stl_s0_server_handle_accept( &stl->server_params,
                                           &sender,
                                           pkt,
                                           buf,
+                                          to_sign,
                                           hs,
                                           sesh );
     if( send_sz < 0 ) {
@@ -250,9 +252,11 @@ fd_stl_process_packet( fd_stl_t *     stl,
     }
     fd_stl_s0_client_hs_t* hs = priv->client_hs + i;
 
+    uchar to_sign[32]; //FIXME: need to sign this
     send_sz = fd_stl_s0_client_handle_continue( &stl->client_params,
                                           pkt,
                                           buf,
+                                          to_sign,
                                           hs );
     if( send_sz < 0 ) {
       FD_LOG_ERR(("STL client handle continue failed"));

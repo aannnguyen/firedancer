@@ -6,6 +6,7 @@
 #include "fd_stl_private.h"
 #include "fd_stl.h"
 #include "../../util/rng/fd_rng.h"
+#include "../../ballet/ed25519/fd_x25519.h"
 
 #include <string.h>
 
@@ -44,6 +45,12 @@ fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
   return STL_MTU_MIN;
 }
 
+void
+fd_stl_s0_crypto_generate_key_share( uchar private_key[32], uchar public_key[32] ) {
+  FD_TEST( fd_rng_secure( private_key, 32 )!=NULL );
+  fd_x25519_public( public_key, private_key );
+}
+
 long
 fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
                                  stl_net_ctx_t const *             ctx,
@@ -60,25 +67,25 @@ fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
     return -1;
   }
 
-  /* Create a SYN cookie */
+  /* Create key_share */
+  uchar key_share[32];
+  uchar key_share_private[32];
+  fd_stl_s0_crypto_generate_key_share( key_share_private, key_share );
 
-  stl_cookie_claims_t claims[1];
-  fd_memset( claims, 0, sizeof(claims) );
-  claims->net   = *ctx;
-
-  uchar cookie[ STL_COOKIE_SZ ];
-  stl_cookie_create( cookie, claims, server->cookie_secret );
-
+  /* Encrypt state */
+  //FIXME
+  (void)ctx;
+  (void)server;
+  
   /* Send back the cookie and our server identity */
 
-  stl_s0_hs_pkt_t * out = (stl_s0_hs_pkt_t *)pkt_out;
+  stl_s0_hs_pkt_server_continue_t * out = (stl_s0_hs_pkt_server_continue_t *)pkt_out;
   fd_memset( out, 0, STL_MTU_MIN );
 
   out->hs.base.version_type = stl_hdr_version_type( STL_V0, STL_TYPE_HS_SERVER_CONTINUE );
-  fd_memcpy( out->hs.cookie,    cookie,            STL_COOKIE_SZ );
   fd_memcpy( out->client_token, pkt->client_token, STL_TOKEN_SZ  );
-  fd_memcpy( out->server_token, server->token,     STL_TOKEN_SZ  );
-  fd_memcpy( out->identity, server->identity, STL_COOKIE_KEY_SZ*2); /* FIXME, probs being very dumb */
+  fd_memcpy( out->key_share, key_share, 32 );
+  fd_memcpy( out->key_share_enc, key_share_private, 32 ); //FIXME
 
   /* Return info to user */
 
@@ -87,71 +94,71 @@ fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
 
 long
 fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
-                                  stl_s0_hs_pkt_t const *           pkt,
+                                  stl_s0_hs_pkt_t const *           pkt_in,
                                   uchar                             pkt_out[ STL_MTU ],
+                                  uchar                             to_sign[32],
                                   fd_stl_s0_client_hs_t *           hs ) {
   (void)client;
 
   /* Expect client state to be awaiting STL_TYPE_HS_SERVER_CONTINUE */
   if( FD_UNLIKELY( hs->state != STL_TYPE_HS_SERVER_CONTINUE ) ) {
-    return 0UL;
+    return -1;
   }
 
-  if( FD_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_CONTINUE ) ) {
-    return 0UL;
+  if( FD_UNLIKELY( stl_hdr_type( &pkt_in->hs.base ) != STL_TYPE_HS_SERVER_CONTINUE ) ) {
+    return -1;
   }
 
-  /* Ignore packet if server identity is unexpected */
+  /* Check client token */
+  stl_s0_hs_pkt_server_continue_t * in = (stl_s0_hs_pkt_server_continue_t *)pkt_in;
+  if( FD_UNLIKELY( 0!=memcmp( in->client_token, hs->client_token, STL_TOKEN_SZ ) ) ) {
+    return -1;
+  }
 
-#if 0
-  if( FD_UNLIKELY( 0!=memcmp( pkt->identity, hs->server_identity, STL_ED25519_KEY_SZ ) ) )
-    return 0UL;
+  /* Generate key_share */
+  uchar key_share[32];
+  uchar key_share_private[32];
+  fd_stl_s0_crypto_generate_key_share( key_share_private, key_share );
 
-  uchar client_identity[ 32 ];
-  fd_memcpy( client_identity, client->identity, STL_COOKIE_KEY_SZ*2 );
+  /* Compute shared_secret */
+  uchar shared_secret_ee[32];
+  fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
+  // FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
 
+  /* FIXME: encrypt identity s */
 
-  /* Create transcript hash */
-  crypto_hash_sha256_state state[1];
-  crypto_hash_sha256_init( state );
-  crypto_hash_sha256_update( state, hs->server_identity, crypto_sign_ed25519_PUBLICKEYBYTES );
-  crypto_hash_sha256_update( state, client_identity,     crypto_sign_ed25519_PUBLICKEYBYTES );
-  crypto_hash_sha256_update( state, pkt->server_token,   STL_TOKEN_SZ );
-  crypto_hash_sha256_update( state, hs->client_token,    STL_TOKEN_SZ );
-  crypto_hash_sha256_update( state, (uchar const *)&pkt->hs.suite, sizeof(ushort) );
-  /* FIXME: add cookie to hash */
-  hs->transcript = *state;
+  /* FIXME: prepare signature */
 
-  uchar client_signed_msg[ 64 ]; /* TODO: client_to_be_signed :) */
-  fd_memcpy( client_signed_msg, sign_prefix_client, 32 );
-  crypto_hash_sha256_final( state, client_signed_msg+32 );
-
-#endif
-  /* Assemble response */
-  stl_s0_hs_pkt_t * out = (stl_s0_hs_pkt_t *)pkt_out;
+  /* assemble response */
+  stl_s0_hs_pkt_client_accept_t * out = (stl_s0_hs_pkt_client_accept_t *)pkt_out;
   fd_memset( out, 0, STL_MTU_MIN );
 
-#if 0
-  /* Sign */
-
-  int sign_err = crypto_sign_ed25519_detached( out_pkt->verify, NULL, client_signed_msg, sizeof(client_signed_msg), client->identity );
-  if( FD_UNLIKELY( sign_err ) ) return 0UL;
-#endif
   out->hs.base.version_type = stl_hdr_version_type( STL_V0, STL_TYPE_HS_CLIENT_ACCEPT );
-  fd_memcpy( out->hs.cookie,    pkt->hs.cookie,    STL_COOKIE_SZ );
-  // fd_memcpy( out->identity,     client_identity,   STL_ED25519_KEY_SZ );
-  fd_memcpy( out->client_token, pkt->client_token, STL_TOKEN_SZ );
-  fd_memcpy( out->server_token, pkt->server_token, STL_TOKEN_SZ );
+  fd_memcpy( out->server_key_share, in->key_share, 32 );
+  fd_memcpy( out->server_key_share_enc, in->key_share_enc, 32 );
+  fd_memcpy( out->key_share, key_share, 32 );
+  fd_memcpy( out->identity, client->identity, 32 ); //FIXME
+
+  //FIXME
+  fd_memcpy( to_sign, shared_secret_ee, 32 );
 
   hs->state = STL_TYPE_HS_SERVER_ACCEPT;
   return STL_MTU_MIN;
 }
 
+void
+fd_stl_s0_client_handle_continue_add_signature( uchar pkt_out[ STL_MTU ], 
+                                                uchar sig[ 64 ] ) {
+  stl_s0_hs_pkt_client_accept_t * out = (stl_s0_hs_pkt_client_accept_t *)pkt_out;
+  fd_memcpy( out->signature, sig, 64 );
+}
+
 long
 fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
                                 stl_net_ctx_t const *                ctx,
-                                stl_s0_hs_pkt_t const *              pkt,
+                                stl_s0_hs_pkt_t const *              pkt_in,
                                 uchar                                pkt_out[ STL_MTU ],
+                                uchar                                to_sign[32],
                                 fd_stl_s0_server_hs_t *              hs,
                                 fd_stl_sesh_t *                      sesh ) {
 
@@ -161,83 +168,61 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
     return -1;
   }
 
-  if( FD_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_CLIENT_ACCEPT ) ) {
+  if( FD_UNLIKELY( stl_hdr_type( &pkt_in->hs.base ) != STL_TYPE_HS_CLIENT_ACCEPT ) ) {
     return -1;
   }
 
-  /* Verify the SYN cookie */
+  stl_s0_hs_pkt_client_accept_t * in = (stl_s0_hs_pkt_client_accept_t *)pkt_in;
 
-  stl_cookie_claims_t claims[1];
-  fd_memset( claims, 0, sizeof(claims) );
-  claims->net   = *ctx;
+  /* Decrypt and verify state */
+  uchar key_share_private[32];
+  uchar key_share_check[32];
+  memcpy( key_share_private, in->server_key_share_enc, 32 ); //FIXME: decrypt
+  fd_x25519_public( key_share_check, key_share_private );
+  if( FD_UNLIKELY( 0!=memcmp( in->server_key_share, key_share_check, 32 ) ) ) {
+    return -1;
+  }
 
-  if( !stl_cookie_verify( pkt->hs.cookie, claims, server->cookie_secret ) )
-    return 0UL;
+  /* Compute shared_secret */
+  uchar shared_secret_ee[32];
+  fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
+  // FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
 
+  /* FIXME: decrypt client identity s and signature sig */
+  uchar client_identity[32];
+  uchar signature[64];
+  fd_memcpy( client_identity, in->identity, 32 );
+  fd_memcpy( signature, in->signature, 64 );
 
-  uchar server_pubkey[32];
-  fd_memcpy( server_pubkey, server->identity, STL_COOKIE_KEY_SZ*2 );
-#if 0
-  /* Create the transcript hash */
-  crypto_hash_sha256_state state0[1];
-  crypto_hash_sha256_state state1[1];
-  crypto_hash_sha256_init( state0 );
-  crypto_hash_sha256_update( state0, server_pubkey,     crypto_sign_ed25519_PUBLICKEYBYTES );
-  crypto_hash_sha256_update( state0, pkt->identity,     crypto_sign_ed25519_PUBLICKEYBYTES );
-  crypto_hash_sha256_update( state0, server->token,     STL_TOKEN_SZ );
-  crypto_hash_sha256_update( state0, pkt->client_token, STL_TOKEN_SZ );
-  crypto_hash_sha256_update( state0, (uchar const *)&claims->suite, sizeof(ushort) );
-  *state1 = *state0;
+  /* FIXME: verify signature */
+  // if( FD_UNLIKELY( fd_ed25519_verify( ... )!=FD_ED25519_SUCCESS ) ) {
+  //   return -1;
+  // }
 
-  /* Verify signature */
+  /* FIXME: encrypt identity s */
 
-  uchar client_signed_msg[64];
-  fd_memcpy( client_signed_msg, sign_prefix_client, 32 );
-  crypto_hash_sha256_final( state0, client_signed_msg+32 );
-
-  int vfy_err = crypto_sign_ed25519_verify_detached(
-      pkt->verify, client_signed_msg, sizeof(client_signed_msg), pkt->identity );
-  if( vfy_err ) return 0UL;
-#endif
+  /* FIXME: prepare signature */
 
   /* Derive session ID */
 
   uchar session_id[ STL_SESSION_ID_SZ ];
   stl_gen_session_id( session_id );
 
-  /* Prepare response */
+  /* assemble response */
 
-  stl_s0_hs_pkt_t * out = (stl_s0_hs_pkt_t *)pkt_out;
+  stl_s0_hs_pkt_server_accept_t * out = (stl_s0_hs_pkt_server_accept_t *)pkt_out;
   fd_memset( out, 0, STL_MTU_MIN );
 
-#if 0
-  uchar server_commitment[ crypto_hash_sha256_BYTES ];
-  crypto_hash_sha256_update( state1, session_id, STL_SESSION_ID_SZ );
-  crypto_hash_sha256_final( state1, server_commitment );
-
-  /* Sign verify */
-
-  uchar server_signed_msg[64];
-  fd_memcpy( server_signed_msg,    sign_prefix_server, 32 );
-  fd_memcpy( server_signed_msg+32, server_commitment,  32 );
-
-  crypto_sign_ed25519_detached(
-      out_pkt->verify, NULL, server_signed_msg, sizeof(server_signed_msg), server->identity );
-#endif
-
-  /* Send back response */
-
   out->hs.base.version_type = stl_hdr_version_type( STL_V0, STL_TYPE_HS_SERVER_ACCEPT );
-  fd_memcpy( out->hs.cookie,    pkt->hs.cookie,    STL_COOKIE_SZ );
-  fd_memcpy( out->client_token, pkt->client_token, STL_TOKEN_SZ  );
-  fd_memcpy( out->server_token, server->token,     STL_TOKEN_SZ  );
   fd_memcpy( out->hs.base.session_id, session_id, STL_SESSION_ID_SZ );
+  fd_memcpy( out->identity, server->identity, 32 ); //FIXME
+
+  //FIXME
+  fd_memcpy( to_sign, shared_secret_ee, 32 );
 
   /* Return info to caller */
 
-  fd_memset( hs, 0, sizeof(fd_stl_s0_server_hs_t) );
   fd_memcpy( hs->session_id, session_id, STL_SESSION_ID_SZ );
-  fd_memcpy( &hs->identity, pkt->identity, STL_COOKIE_KEY_SZ );
 
   sesh->session_id = FD_LOAD( ulong, hs->session_id );
   sesh->socket_addr = ctx->b;
@@ -245,6 +230,13 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
 
   hs->state = STL_TYPE_HS_DONE;
   return STL_MTU_MIN;
+}
+
+void
+fd_stl_s0_server_handle_accept_add_signature( uchar pkt_out[ STL_MTU ], 
+                                              uchar sig[ 64 ] ) {
+  stl_s0_hs_pkt_server_accept_t * out = (stl_s0_hs_pkt_server_accept_t *)pkt_out;
+  fd_memcpy( out->signature, sig, 64 );
 }
 
 void
@@ -269,7 +261,7 @@ fd_stl_s0_client_hs_new( void * mem ) {
 
 long
 fd_stl_s0_client_handle_accept( fd_stl_s0_client_params_t const * client,
-                                stl_s0_hs_pkt_t const *           pkt,
+                                stl_s0_hs_pkt_t const *           pkt_in,
                                 fd_stl_s0_client_hs_t *           hs ) {
   (void)client;
 
@@ -278,9 +270,22 @@ fd_stl_s0_client_handle_accept( fd_stl_s0_client_params_t const * client,
     return -1;
   }
 
-  if( FD_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_ACCEPT ) ) {
+  if( FD_UNLIKELY( stl_hdr_type( &pkt_in->hs.base ) != STL_TYPE_HS_SERVER_ACCEPT ) ) {
     return -1;
   }
+
+  stl_s0_hs_pkt_client_accept_t * in = (stl_s0_hs_pkt_client_accept_t *)pkt_in;
+
+  /* FIXME: decrypt server identity s and signature sig */
+  uchar server_identity[32];
+  uchar signature[64];
+  fd_memcpy( server_identity, in->identity, 32 );
+  fd_memcpy( signature, in->signature, 64 );
+
+  /* FIXME: verify signature */
+  // if( FD_UNLIKELY( fd_ed25519_verify( ... )!=FD_ED25519_SUCCESS ) ) {
+  //   return -1;
+  // }
           
   hs->state = STL_TYPE_HS_DONE;
   return 0UL;

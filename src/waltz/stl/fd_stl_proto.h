@@ -53,6 +53,7 @@
 #define STL_COOKIE_KEY_SZ (16UL)
 
 #define STL_ED25519_KEY_SZ (32UL)
+#define STL_STATE_KEY_SZ   (16UL)
 
 /* STL_TOKEN_SZ is the byte size of the "random token" value.  Both
    client and server mix in their token value into the handshake
@@ -198,5 +199,33 @@ union __attribute__((packed)) stl_s0_hs_pkt {
 
 typedef union stl_s0_hs_pkt stl_s0_hs_pkt_t;
 
+struct stl_s0_hs_pkt_server_continue {
+   stl_hdr_hs_t hs;
+
+   uchar client_token[STL_TOKEN_SZ];
+   uchar key_share[32];
+   uchar key_share_enc[32];
+};
+typedef struct stl_s0_hs_pkt_server_continue stl_s0_hs_pkt_server_continue_t;
+
+struct stl_s0_hs_pkt_client_accept {
+   stl_hdr_hs_t hs;
+
+   uchar server_key_share[32];
+   uchar server_key_share_enc[32];
+   uchar key_share[32];
+   /* TODO: if this data is encrypted, it'll be bigger */
+   uchar identity[32];
+   uchar signature[64];
+};
+typedef struct stl_s0_hs_pkt_client_accept stl_s0_hs_pkt_client_accept_t;
+
+struct stl_s0_hs_pkt_server_accept {
+   stl_hdr_hs_t hs;
+
+   uchar identity[32];
+   uchar signature[32];
+};
+typedef struct stl_s0_hs_pkt_server_accept stl_s0_hs_pkt_server_accept_t;
 
 #endif /* HEADER_stl_proto_h */
