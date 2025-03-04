@@ -15,7 +15,6 @@ struct fd_stl_s0_client_params {
   /* cookie_secret is an ephemeral key used to create and verify
      handshake cookies. */
   uchar cookie_secret[ STL_COOKIE_KEY_SZ ];
-
 };
 
 typedef struct fd_stl_s0_client_params fd_stl_s0_client_params_t;

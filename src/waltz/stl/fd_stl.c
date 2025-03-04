@@ -86,6 +86,7 @@ fd_stl_send( fd_stl_t * stl,
              stl_net_ctx_t *  dst,
              void const *     data,
              ulong            data_sz) {
+  dst->parts.padding = 0x0; /* always clear */
   /* TODO better error handling */
   if( data_sz > STL_BASIC_PAYLOAD_MTU ) {
     return -1;
@@ -137,7 +138,7 @@ fd_stl_send( fd_stl_t * stl,
       FD_LOG_ERR(("STL buffer overflow")); /* TODO - change this */
       return -3;
     }
-    
+
     fd_stl_payload_t* payload_buf = hs->buffers + hs->buffers_sz++;
     payload_buf->sz = (ushort)data_sz;
     fd_memcpy( payload_buf->data, data, data_sz );

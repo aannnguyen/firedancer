@@ -17,7 +17,6 @@ struct fd_stl_s0_server_params {
   uchar cookie_secret[ STL_COOKIE_KEY_SZ ];
 
   uchar token[16];
-
 };
 
 typedef struct fd_stl_s0_server_params fd_stl_s0_server_params_t;

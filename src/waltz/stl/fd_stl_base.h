@@ -17,7 +17,7 @@ union stl_net_ctx {
   struct __attribute__((packed)) stl_net_ctx_parts {
     uint  ip4;
     ushort port;
-    ushort padding;
+    ushort padding; /* WILL BE CLOBBERED */
   } parts;
 
   ulong b;
