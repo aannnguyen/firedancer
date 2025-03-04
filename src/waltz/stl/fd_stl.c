@@ -135,7 +135,7 @@ fd_stl_send( fd_stl_t * stl,
 
     /* buffer data */
     if( hs->buffers_sz >= FD_STL_MAX_BUF ) {
-      FD_LOG_ERR(("STL buffer overflow")); /* TODO - change this */
+      FD_LOG_NOTICE(("STL buffer overflow")); /* TODO - change this */
       return -3;
     }
 
