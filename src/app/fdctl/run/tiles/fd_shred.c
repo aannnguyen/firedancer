@@ -477,9 +477,9 @@ during_frag( fd_shred_ctx_t * ctx,
 
     /* TODO can nettile somehow send src sock_addr ? */
     const uchar *ip_hdr = dcache_entry + 14;
-    uchar ip_hdr_len = (ip_hdr[0] & 0x0F) * 4;
+    uchar ip_hdr_len = (uchar)(ip_hdr[0] & 0x0F) * 4;
     const uchar *udp_hdr = ip_hdr + ip_hdr_len;
-    ushort src_port = (ushort)udp_hdr[0] << 8 | udp_hdr[1];
+    ushort src_port = (ushort)((ushort)udp_hdr[0] << 8 | udp_hdr[1]);
     uint src_ip = (uint)ip_hdr[12] | ((uint)ip_hdr[13] << 8) |
                 ((uint)ip_hdr[14] << 16) | ((uint)ip_hdr[15] << 24);
     FD_LOG_NOTICE(("STL src ip: %u, src port: %hu", src_ip, src_port));
