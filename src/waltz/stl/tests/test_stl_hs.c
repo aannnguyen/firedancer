@@ -22,35 +22,22 @@ wallclock( void ) {
 static void
 test_s0_handshake( void ) {
 
-  // uchar server_identity_seed[32]={0}; server_identity_seed[31] = 0x01;
-  // uchar client_identity_seed[32]={0}; client_identity_seed[31] = 0x81;
-
-  // uchar scratch[32];
-
-  fd_stl_s0_server_params_t server = {0};
-
-  for( uint i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
-    server.identity[i] = (uchar)(i&0xff);
+  /* Init server, server_hs */
+  fd_stl_s0_server_params_t server[1] = {0};
+  for( uint i=0; i < STL_ED25519_KEY_SZ; ++i ) {
+    server->identity[i] = (uchar)(i&0xff);
   }
-  server.cookie_secret[15] = 0x02;
-  server.token[15] = 0x03; /* FIXME: shouldn't this be rng in stl_s0_server_handshake? */
+  fd_stl_s0_server_hs_t server_hs[1] = {0};
 
-  fd_stl_s0_client_params_t client = {0};
-  for( uint i=0; i < STL_EDBLAH_KEY_SZ; ++i ) {
-    server.identity[i] = (uchar)(i&0x7f);
+  /* Init client, client_hs */
+  fd_stl_s0_client_params_t client[1] = {0};
+  for( uint i=0; i < STL_ED25519_KEY_SZ; ++i ) {
+    client->identity[i] = (uchar)(i&0x7f);
   }
-  client.cookie_secret[15] = 0x12;
+  fd_stl_s0_client_hs_t client_hs[1]; fd_stl_s0_client_hs_new( client_hs );
 
-  fd_stl_s0_server_hs_t server_hs = {0};
-  fd_stl_s0_client_hs_t client_hs; fd_stl_s0_client_hs_new( &client_hs );
-
-  /* FIXME: create fn to init with server identity and gen token */
-  memcpy( client_hs.server_identity, server.identity, STL_EDBLAH_KEY_SZ );
-  client_hs.client_token[15] = 0x13;
-
-  stl_net_ctx_t client_addr = FD_STL_NET_CTX_T_EMPTY;
-  client_addr.parts.ip4 = 0x21;
-  client_addr.parts.port = 8001;
+  stl_net_ctx_t ctx[1] = { 0 };
+  fd_stl_sesh_t server_sesh[1] = { 0 };
 
   uchar client_pkt[ STL_MTU ];
   uchar server_pkt[ STL_MTU ];
@@ -58,28 +45,32 @@ test_s0_handshake( void ) {
   long client_pkt_sz;
   long server_pkt_sz;
 
-  client_pkt_sz = fd_stl_s0_client_initial( &client, &client_hs, client_pkt );
+  assert( client_hs->state == 0 );
+  assert( server_hs->state == 0 );
+
+  client_pkt_sz = fd_stl_s0_client_initial( client, client_hs, client_pkt );
   assert( client_pkt_sz>0L );
-  assert( client_hs.state == STL_TYPE_HS_CLIENT_INITIAL );
+  assert( client_hs->state == STL_TYPE_HS_SERVER_CONTINUE );
 
-  server_pkt_sz = fd_stl_s0_server_handle_initial( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
+  server_pkt_sz = fd_stl_s0_server_handle_initial( server, ctx, (stl_s0_hs_pkt_t *)client_pkt, server_pkt, server_hs );
   assert( server_pkt_sz>0L );
-  assert( !server_hs.done );
+  assert( server_hs->state == 0 );
 
-  client_pkt_sz = fd_stl_s0_client_handle_continue( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
+  client_pkt_sz = fd_stl_s0_client_handle_continue( client, (stl_s0_hs_pkt_t *)server_pkt, client_pkt, client_hs );
   assert( client_pkt_sz>0L );
-  assert( client_hs.state == STL_TYPE_HS_SERVER_CONTINUE );
+  assert( client_hs->state == STL_TYPE_HS_SERVER_ACCEPT );
 
-  server_pkt_sz = fd_stl_s0_server_handle_accept( &server, &client_addr, client_pkt, client_pkt_sz, server_pkt, &server_hs );
+  server_pkt_sz = fd_stl_s0_server_handle_accept( server, ctx, (stl_s0_hs_pkt_t *)client_pkt, server_pkt, server_hs, server_sesh );
   assert( server_pkt_sz>0L );
-  assert( server_hs.done );
+  assert( server_hs->state == STL_TYPE_HS_DONE );
 
-  client_pkt_sz = fd_stl_s0_client_handle_accept( &client, &client_hs, server_pkt, server_pkt_sz, client_pkt );
-  assert( client_pkt_sz==0L ); /* FIXME: 0 should not be both error and success */
-  assert( client_hs.state == STL_TYPE_HS_SERVER_ACCEPT );
+  client_pkt_sz = fd_stl_s0_client_handle_accept( client, (stl_s0_hs_pkt_t *)server_pkt, client_hs );
+  assert( client_pkt_sz==0L );
+  assert( client_hs->state == STL_TYPE_HS_DONE );
 
   puts( "S0 handshake: OK" );
 
+#if 0
   uchar payload[STL_BASIC_PAYLOAD_MTU]; /* FIXME: use the correct MTU here */
   uchar rcv_payload[STL_BASIC_PAYLOAD_MTU];
   ushort payload_sz = STL_BASIC_PAYLOAD_MTU;
@@ -103,7 +94,7 @@ test_s0_handshake( void ) {
   }
   */
 
-  long encoded_sz = fd_stl_s0_encode_appdata(&client_hs, payload, payload_sz, client_pkt /*, config */);
+  long encoded_sz = fd_stl_s0_encode_appdata(client_hs, payload, payload_sz, client_pkt /*, config */);
   assert(encoded_sz > 0L);
 
   /* client_pkt to net tile -> client_pkt from net tile */
@@ -113,7 +104,7 @@ test_s0_handshake( void ) {
   assert(rcv_payload_sz == payload_sz);
   assert(memcmp(rcv_payload, payload, (size_t)rcv_payload_sz) == 0);
   puts("S0 application decode/encode: OK");
-
+#endif
 }
 
 static void

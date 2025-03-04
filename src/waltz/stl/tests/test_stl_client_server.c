@@ -82,7 +82,7 @@ setup_server_stl(void *mem, fd_stl_limits_t *limits) {
   server->cb.stl_ctx = NULL;
 
   // // Initialize server parameters
-  // for (uint i = 0; i < STL_EDBLAH_KEY_SZ; ++i) {
+  // for (uint i = 0; i < STL_ED25519_KEY_SZ; ++i) {
   //   server->server_params.identity[i] = (uchar)(i & 0xff);
   // }
   // server->server_params.cookie_secret[15] = 0x02;

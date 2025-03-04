@@ -8,7 +8,8 @@
 
 /* STL_MTU controls the maximum supported UDP payload size. */
 
-#define STL_MTU (2048UL)
+#define STL_MTU     (2048UL)
+#define STL_MTU_MIN (1200UL)
 
 /* STL_V{...} identify STL versions. */
 
@@ -18,12 +19,16 @@
 
 #define STL_TYPE_NULL               ((uchar)0x00)  /* invalid */
 #define STL_TYPE_APP_SIMPLE         ((uchar)0x01)
-#define STL_TYPE_APP_ENCRYPTED      ((uchar)0x02)
+#define STL_TYPE_APP_AUTH           ((uchar)0x02)
+#define STL_TYPE_APP_ENCRYPTED      ((uchar)0x03)
+#define STL_TYPE_APP_TLV            ((uchar)0x04)
 
-#define STL_TYPE_HS_CLIENT_INITIAL  ((uchar)0x04)
-#define STL_TYPE_HS_SERVER_CONTINUE ((uchar)0x05)
-#define STL_TYPE_HS_CLIENT_ACCEPT   ((uchar)0x06)
-#define STL_TYPE_HS_SERVER_ACCEPT   ((uchar)0x07)
+#define STL_TYPE_HS_CLIENT_INITIAL  ((uchar)0x08)
+#define STL_TYPE_HS_SERVER_CONTINUE ((uchar)0x09)
+#define STL_TYPE_HS_CLIENT_ACCEPT   ((uchar)0x0A)
+#define STL_TYPE_HS_SERVER_ACCEPT   ((uchar)0x0B)
+
+#define STL_TYPE_HS_DONE            ((uchar)0xFF) /* invalid on wire */
 
 /* STL_SUITE_{...} defines cipher suite IDs.
 
@@ -47,7 +52,7 @@
 
 #define STL_COOKIE_KEY_SZ (16UL)
 
-#define STL_EDBLAH_KEY_SZ (32UL)
+#define STL_ED25519_KEY_SZ (32UL)
 
 /* STL_TOKEN_SZ is the byte size of the "random token" value.  Both
    client and server mix in their token value into the handshake

@@ -10,7 +10,7 @@ struct fd_stl_s0_client_params {
 
   /* identity is a compound structure of the identity private and
      public key */
-  uchar identity[ STL_EDBLAH_KEY_SZ ];
+  uchar identity[ STL_ED25519_KEY_SZ ];
 
   /* cookie_secret is an ephemeral key used to create and verify
      handshake cookies. */
@@ -28,7 +28,7 @@ struct fd_stl_s0_client_hs {
   ulong socket_addr;
   uchar session_id[ STL_SESSION_ID_SZ ];
   uchar _session_id_pad[1];
-  uchar server_identity[ STL_EDBLAH_KEY_SZ ];
+  uchar server_identity[ STL_ED25519_KEY_SZ ];
   fd_stl_payload_t buffers[FD_STL_MAX_BUF];
   uchar buffers_sz;
 };
@@ -42,8 +42,8 @@ fd_stl_s0_client_hs_new( void * hs );
 
 long
 fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
-                       fd_stl_s0_client_hs_t const *     hs,
-                       uchar                        pkt_out[ static STL_MTU ] );
+                          fd_stl_s0_client_hs_t *           hs,
+                          uchar                             pkt_out[ STL_MTU ] );
 
 // long
 // fd_stl_s0_client_handshake( fd_stl_s0_client_params_t const * client,
@@ -62,7 +62,12 @@ fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
 
 // TODO document
 long
-fd_stl_s0_client_handle_accept( fd_stl_t* stl,
+fd_stl_s0_client_handle_accept( fd_stl_s0_client_params_t const * client,
+                                stl_s0_hs_pkt_t const *           pkt,
+                                fd_stl_s0_client_hs_t *           hs );
+
+long
+fd_stl_s0_client_handle_accept2( fd_stl_t* stl,
                                 stl_s0_hs_pkt_t const * pkt,
                                 uchar                  out[ STL_MTU ],
                                 fd_stl_s0_client_hs_t *    hs );

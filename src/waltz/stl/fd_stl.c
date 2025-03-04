@@ -270,7 +270,7 @@ fd_stl_process_packet( fd_stl_t *     stl,
       return;
     }
     fd_stl_s0_client_hs_t* hs = priv->client_hs + i;
-    send_sz = fd_stl_s0_client_handle_accept( stl,
+    send_sz = fd_stl_s0_client_handle_accept2( stl,
                                          pkt,
                                          buf,
                                          hs );

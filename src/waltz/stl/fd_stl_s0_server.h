@@ -24,7 +24,7 @@ typedef struct fd_stl_s0_server_params fd_stl_s0_server_params_t;
 struct fd_stl_s0_server_hs {
   uchar identity[ STL_COOKIE_KEY_SZ ];
   uchar session_id[ STL_SESSION_ID_SZ ];
-  int    done;
+  uchar state;
   fd_stl_payload_t buffers[FD_STL_MAX_BUF];
 };
 
