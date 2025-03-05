@@ -18,6 +18,11 @@ static char const sign_prefix_client[32] =
   "STL v0 s0 client transcript     ";
 #endif
 
+void
+fd_stl_rng( uchar * buf, ulong buf_sz ) {
+  FD_TEST( fd_rng_secure( buf, buf_sz )!=NULL );
+}
+
 long
 fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
                           fd_stl_s0_client_hs_t *           hs,
@@ -36,7 +41,7 @@ fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
   fd_memcpy( out->identity, client->identity, STL_ED25519_KEY_SZ );
 
   /* client token */
-  FD_TEST( fd_rng_secure( hs->client_token, STL_TOKEN_SZ )!=NULL );
+  fd_stl_rng( hs->client_token, STL_TOKEN_SZ );
   fd_memcpy( out->client_token, hs->client_token, STL_TOKEN_SZ );
 
   /* set next expected state */
@@ -47,7 +52,7 @@ fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
 
 void
 fd_stl_s0_crypto_generate_key_share( uchar private_key[32], uchar public_key[32] ) {
-  FD_TEST( fd_rng_secure( private_key, 32 )!=NULL );
+  fd_stl_rng( private_key, 32 );
   fd_x25519_public( public_key, private_key );
 }
 
@@ -123,7 +128,7 @@ fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
   /* Compute shared_secret */
   uchar shared_secret_ee[32];
   fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
-  // FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
+  FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
 
   /* FIXME: encrypt identity s */
 
@@ -186,7 +191,7 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
   /* Compute shared_secret */
   uchar shared_secret_ee[32];
   fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
-  // FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
+  FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
 
   /* FIXME: decrypt client identity s and signature sig */
   uchar client_identity[32];

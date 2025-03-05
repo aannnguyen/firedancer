@@ -203,28 +203,29 @@ struct stl_s0_hs_pkt_server_continue {
    stl_hdr_hs_t hs;
 
    uchar client_token[STL_TOKEN_SZ];
-   uchar key_share[32];
-   uchar key_share_enc[32];
+   uchar key_share[32];     // e
+   uchar key_share_enc[32]; // h
 };
 typedef struct stl_s0_hs_pkt_server_continue stl_s0_hs_pkt_server_continue_t;
 
 struct stl_s0_hs_pkt_client_accept {
    stl_hdr_hs_t hs;
 
-   uchar server_key_share[32];
-   uchar server_key_share_enc[32];
-   uchar key_share[32];
+   uchar server_key_share[32];     // e
+   uchar server_key_share_enc[32]; // h
+   uchar key_share[32];  // e
    /* TODO: if this data is encrypted, it'll be bigger */
-   uchar identity[32];
-   uchar signature[64];
+   uchar identity[32];   // s
+   uchar signature[64];  // sig
 };
 typedef struct stl_s0_hs_pkt_client_accept stl_s0_hs_pkt_client_accept_t;
 
 struct stl_s0_hs_pkt_server_accept {
    stl_hdr_hs_t hs;
 
-   uchar identity[32];
-   uchar signature[32];
+   /* TODO: if this data is encrypted, it'll be bigger */
+   uchar identity[32];  // s
+   uchar signature[32]; // sig
 };
 typedef struct stl_s0_hs_pkt_server_accept stl_s0_hs_pkt_server_accept_t;
 

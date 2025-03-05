@@ -26,7 +26,7 @@ int stl_cookie_verify(uchar const cookie[static STL_COOKIE_SZ],
   return (*(volatile ulong *)expected) == (*(volatile ulong *)cookie);
 }
 
-void stl_gen_session_id(uchar session_id[static STL_SESSION_ID_SZ])
+void stl_gen_session_id(uchar session_id[STL_SESSION_ID_SZ])
 {
   static fd_rng_t _rng[1];
   static int _done_init = 0;
@@ -37,4 +37,9 @@ void stl_gen_session_id(uchar session_id[static STL_SESSION_ID_SZ])
 
   ulong rnd_num = fd_rng_ulong( _rng );
   memcpy( session_id, &rnd_num, STL_SESSION_ID_SZ );
+  //FIXME: remove
+  session_id[3] = (uchar)0xDE;
+  session_id[4] = (uchar)0xAD;
+  session_id[5] = (uchar)0xBE;
+  session_id[6] = (uchar)0xEF;
 }
