@@ -96,6 +96,15 @@ stl_cookie_verify( uchar const               cookie[ static STL_COOKIE_SZ ],
 void
 stl_gen_session_id( uchar session_id[ static STL_SESSION_ID_SZ ] );
 
+void
+fd_stl_s0_crypto_key_share_generate( uchar private_key[32], uchar public_key[32] );
+
+void
+fd_stl_s0_crypto_enc_state_generate( uchar private_key_enc[48], uchar public_key[32], uchar const key[16] );
+
+int
+fd_stl_s0_crypto_enc_state_verify( uchar private_key[32], uchar const private_key_enc[48], uchar const public_key[32], uchar const key[16] );
+
 FD_PROTOTYPES_END
 
 #endif /* HEADER_stl_private_h */

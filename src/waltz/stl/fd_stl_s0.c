@@ -6,6 +6,8 @@
 #include "fd_stl_private.h"
 #include "fd_stl.h"
 #include "../../util/rng/fd_rng.h"
+#include "../../ballet/aes/fd_aes_gcm.h"
+#include "../../ballet/ed25519/fd_ed25519.h"
 #include "../../ballet/ed25519/fd_x25519.h"
 
 #include <string.h>
@@ -18,7 +20,7 @@ static char const sign_prefix_client[32] =
   "STL v0 s0 client transcript     ";
 #endif
 
-void
+static inline void
 fd_stl_rng( uchar * buf, ulong buf_sz ) {
   FD_TEST( fd_rng_secure( buf, buf_sz )!=NULL );
 }
@@ -51,9 +53,38 @@ fd_stl_s0_client_initial( fd_stl_s0_client_params_t const * client,
 }
 
 void
-fd_stl_s0_crypto_generate_key_share( uchar private_key[32], uchar public_key[32] ) {
+fd_stl_s0_crypto_key_share_generate( uchar private_key[32], uchar public_key[32] ) {
   fd_stl_rng( private_key, 32 );
   fd_x25519_public( public_key, private_key );
+}
+
+void
+fd_stl_s0_crypto_enc_state_generate( uchar private_key_enc[48], uchar public_key[32], uchar const key[16] ) {
+  uchar private_key[32];
+  fd_stl_rng( private_key, 32 );
+  fd_x25519_public( public_key, private_key );
+
+  fd_aes_gcm_t aes_gcm[1];
+  fd_aes_128_gcm_init( aes_gcm, key, public_key );
+  fd_aes_gcm_encrypt( aes_gcm, private_key_enc, private_key, 32, NULL, 0, private_key_enc+32 );
+}
+
+int
+fd_stl_s0_crypto_enc_state_verify( uchar private_key[32], uchar const private_key_enc[48], uchar const public_key[32], uchar const key[16] ) {
+  uchar public_key_check[32];
+
+  fd_aes_gcm_t aes_gcm[1];
+  fd_aes_128_gcm_init( aes_gcm, key, public_key );
+  if( FD_UNLIKELY( 1!=fd_aes_gcm_decrypt( aes_gcm, private_key_enc, private_key, 32, NULL, 0, private_key_enc+32 ) ) ) {
+    return -1;
+  };
+
+  fd_x25519_public( public_key_check, private_key );
+  if( FD_UNLIKELY( 0!=memcmp( public_key, public_key_check, 32 ) ) ) {
+    return -1;
+  }
+
+  return 0;
 }
 
 long
@@ -63,6 +94,8 @@ fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
                                  uchar                             pkt_out[ STL_MTU ],
                                  fd_stl_s0_server_hs_t * const     hs /* server_initial is stateless, we do NOT modify hs */
 ) {
+  (void)ctx;
+
   /* Expect server state to be just initialized */
   if( FD_UNLIKELY( hs->state != 0 ) ) {
     return 0UL;
@@ -74,13 +107,8 @@ fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
 
   /* Create key_share */
   uchar key_share[32];
-  uchar key_share_private[32];
-  fd_stl_s0_crypto_generate_key_share( key_share_private, key_share );
-
-  /* Encrypt state */
-  //FIXME
-  (void)ctx;
-  (void)server;
+  uchar key_share_private_enc[32+16];
+  fd_stl_s0_crypto_enc_state_generate( key_share_private_enc, key_share, server->state_enc_key );
 
   /* Send back the cookie and our server identity */
 
@@ -90,7 +118,7 @@ fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
   out->hs.base.version_type = stl_hdr_version_type( STL_V0, STL_TYPE_HS_SERVER_CONTINUE );
   fd_memcpy( out->client_token, pkt->client_token, STL_TOKEN_SZ  );
   fd_memcpy( out->key_share, key_share, 32 );
-  fd_memcpy( out->key_share_enc, key_share_private, 32 ); //FIXME
+  fd_memcpy( out->key_share_enc, key_share_private_enc, 48 );
 
   /* Return info to user */
 
@@ -123,13 +151,12 @@ fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
   /* Generate key_share */
   uchar key_share[32];
   uchar key_share_private[32];
-  fd_stl_s0_crypto_generate_key_share( key_share_private, key_share );
+  fd_stl_s0_crypto_key_share_generate( key_share_private, key_share );
 
   /* Compute shared_secret */
   uchar shared_secret_ee[32];
   fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
-  FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
-
+  
   /* FIXME: encrypt identity s */
 
   /* FIXME: prepare signature */
@@ -140,7 +167,7 @@ fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
 
   out->hs.base.version_type = stl_hdr_version_type( STL_V0, STL_TYPE_HS_CLIENT_ACCEPT );
   fd_memcpy( out->server_key_share, in->key_share, 32 );
-  fd_memcpy( out->server_key_share_enc, in->key_share_enc, 32 );
+  fd_memcpy( out->server_key_share_enc, in->key_share_enc, 48 );
   fd_memcpy( out->key_share, key_share, 32 );
   fd_memcpy( out->identity, client->identity, 32 ); //FIXME
 
@@ -181,17 +208,13 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
 
   /* Decrypt and verify state */
   uchar key_share_private[32];
-  uchar key_share_check[32];
-  memcpy( key_share_private, in->server_key_share_enc, 32 ); //FIXME: decrypt
-  fd_x25519_public( key_share_check, key_share_private );
-  if( FD_UNLIKELY( 0!=memcmp( in->server_key_share, key_share_check, 32 ) ) ) {
+  if( FD_UNLIKELY( fd_stl_s0_crypto_enc_state_verify( key_share_private, in->server_key_share_enc, in->server_key_share, server->state_enc_key )<0 ) ) {
     return -1;
   }
 
   /* Compute shared_secret */
   uchar shared_secret_ee[32];
   fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
-  FD_LOG_HEXDUMP_INFO(( "ee", shared_secret_ee, 32 ));
 
   /* FIXME: decrypt client identity s and signature sig */
   uchar client_identity[32];

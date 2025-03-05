@@ -160,7 +160,7 @@ bench_cookie( void ) {
   double ops  = ((double)iter) / ((double)dt) * 1e3;
   double ns   = ((double)dt) / ((double)iter);
   double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
-  fprintf( stderr, "Benchmarking cookie issue\n" );
+  fprintf( stderr, "Benchmarking \"old cookie\" generate\n" );
   fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
   fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
   fprintf( stderr, "\t~%6.3f ns / op\n", ns );
@@ -193,7 +193,105 @@ bench_cookie_verify( void ) {
   double ops  = ((double)iter) / ((double)dt) * 1e3;
   double ns   = ((double)dt) / ((double)iter);
   double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
-  fprintf( stderr, "Benchmarking cookie verify\n" );
+  fprintf( stderr, "Benchmarking \"old cookie\" verify\n" );
+  fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
+  fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
+  fprintf( stderr, "\t~%6.3f ns / op\n", ns );
+}
+
+static void
+bench_ephemeral_generate( void ) {
+
+  uchar public_key[32];
+  uchar private_key[32];
+
+  /* warmup */
+  for( unsigned long rem=1000UL; rem; rem-- ) {
+    fd_stl_s0_crypto_key_share_generate( private_key, public_key );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (private_key[0]) );
+  }
+
+  /* for real */
+  unsigned long iter = 2000UL;
+  long          dt   = -wallclock();
+  for( unsigned long rem=iter; rem; rem-- ) {
+    fd_stl_s0_crypto_key_share_generate( private_key, public_key );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (private_key[0]) );
+  }
+  dt += wallclock();
+
+  double ops  = ((double)iter) / ((double)dt) * 1e3;
+  double ns   = ((double)dt) / ((double)iter);
+  double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
+  fprintf( stderr, "Benchmarking ephemeral/key share generate\n" );
+  fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
+  fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
+  fprintf( stderr, "\t~%6.3f ns / op\n", ns );
+}
+
+static void
+bench_enc_state_generate( void ) {
+
+  uchar public_key[32];
+  uchar private_key_enc[48];
+  uchar key[16];
+
+  FD_TEST( fd_rng_secure( key, 16 )!=NULL );
+
+  /* warmup */
+  for( unsigned long rem=1000UL; rem; rem-- ) {
+    fd_stl_s0_crypto_enc_state_generate( private_key_enc, public_key, key );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (private_key_enc[0]) );
+  }
+
+  /* for real */
+  unsigned long iter = 2000UL;
+  long          dt   = -wallclock();
+  for( unsigned long rem=iter; rem; rem-- ) {
+    fd_stl_s0_crypto_enc_state_generate( private_key_enc, public_key, key );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (private_key_enc[0]) );
+  }
+  dt += wallclock();
+
+  double ops  = ((double)iter) / ((double)dt) * 1e3;
+  double ns   = ((double)dt) / ((double)iter);
+  double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
+  fprintf( stderr, "Benchmarking encrypted state generate\n" );
+  fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
+  fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
+  fprintf( stderr, "\t~%6.3f ns / op\n", ns );
+}
+
+static void
+bench_enc_state_verify( void ) {
+
+  uchar public_key[32];
+  uchar private_key_enc[48];
+  uchar key[16];
+  uchar private_key[32];
+
+  FD_TEST( fd_rng_secure( key, 16 )!=NULL );
+  fd_stl_s0_crypto_enc_state_generate( private_key_enc, public_key, key );
+
+  /* warmup */
+  for( unsigned long rem=1000UL; rem; rem-- ) {
+    fd_stl_s0_crypto_enc_state_verify( private_key, private_key_enc, public_key, key );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (private_key[0]) );
+  }
+
+  /* for real */
+  unsigned long iter = 2000UL;
+  long          dt   = -wallclock();
+  for( unsigned long rem=iter; rem; rem-- ) {
+    fd_stl_s0_crypto_enc_state_verify( private_key, private_key_enc, public_key, key );
+    __asm__ __volatile__( "# Compiler Barrier" : "+r" (private_key[0]) );
+  }
+  dt += wallclock();
+
+  double ops  = ((double)iter) / ((double)dt) * 1e3;
+  double ns   = ((double)dt) / ((double)iter);
+  double gbps = ((float)(8UL*(70UL+1200UL)*iter)) / ((float)dt);
+  fprintf( stderr, "Benchmarking encrypted state verify\n" );
   fprintf( stderr, "\t~%.3f Gbps Ethernet equiv throughput / core\n", gbps );
   fprintf( stderr, "\t~%6.3f Mpps / core\n", ops );
   fprintf( stderr, "\t~%6.3f ns / op\n", ns );
@@ -208,6 +306,9 @@ main( int     argc,
   test_s0_handshake();
   bench_cookie();
   bench_cookie_verify();
+  bench_ephemeral_generate();
+  bench_enc_state_generate();
+  bench_enc_state_verify();
 
   return 0;
 }
