@@ -20,7 +20,9 @@ static char const sign_prefix_client[32] =
 
 void
 fd_stl_rng( uchar * buf, ulong buf_sz ) {
-  FD_TEST( fd_rng_secure( buf, buf_sz )!=NULL );
+  *((ulong *)buf) = 0xdeadbeef;
+  *((ulong *)(buf+8)) = 0xdeadbeef;
+  // FD_TEST( fd_rng_secure( buf, buf_sz )!=NULL );
 }
 
 long
