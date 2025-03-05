@@ -54,21 +54,15 @@ fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
                                   fd_stl_s0_client_hs_t *           hs );
 
 void
-fd_stl_s0_client_handle_continue_add_signature( uchar out[ STL_MTU ], 
+fd_stl_s0_client_handle_continue_add_signature( uchar out[ STL_MTU ],
                                                 uchar sig[ 64 ] );
 
 // TODO document
 long
-fd_stl_s0_client_handle_accept( fd_stl_s0_client_params_t const * client,
+fd_stl_s0_client_handle_accept( fd_stl_t*                         stl,
+                                fd_stl_s0_client_params_t const * client,
                                 stl_s0_hs_pkt_t const *           pkt,
                                 fd_stl_s0_client_hs_t *           hs );
-
-long
-fd_stl_s0_client_handle_accept2( fd_stl_t* stl,
-                                stl_s0_hs_pkt_t const * pkt,
-                                uchar                  out[ STL_MTU ],
-                                fd_stl_s0_client_hs_t *    hs );
-
 
 /*
   fd_stl_s0_encode_appdata is a temporary function that encodes the payload into

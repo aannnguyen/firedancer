@@ -3,6 +3,7 @@
 #include "../fd_stl_private.h"
 #include "../fd_stl_s0_server.h"
 #include "../fd_stl_s0_client.h"
+#include "../fd_stl.h"
 #include "../../../ballet/sha512/fd_sha512.h"
 #include "../../../ballet/ed25519/fd_ed25519.h"
 
@@ -37,9 +38,9 @@ test_s0_handshake( void ) {
   /* Init server, server_hs */
   fd_stl_s0_server_params_t server[1] = {0};
   fd_stl_s0_server_hs_t server_hs[1] = {0};
-  
+
   uchar server_private_key[32];
-  external_generate_keypair( server_private_key, server->identity );  
+  external_generate_keypair( server_private_key, server->identity );
   FD_TEST( fd_rng_secure( server->state_enc_key, 16 )!=NULL );
 
   /* Init client, client_hs */
@@ -47,7 +48,7 @@ test_s0_handshake( void ) {
   fd_stl_s0_client_hs_t client_hs[1]; fd_stl_s0_client_hs_new( client_hs );
 
   uchar client_private_key[32];
-  external_generate_keypair( client_private_key, client->identity );  
+  external_generate_keypair( client_private_key, client->identity );
 
   /* Init ctx, sessions */
 
@@ -85,9 +86,15 @@ test_s0_handshake( void ) {
   assert( server_pkt_sz>0L );
   assert( server_hs->state == STL_TYPE_HS_DONE );
 
-  client_pkt_sz = fd_stl_s0_client_handle_accept( client, (stl_s0_hs_pkt_t *)server_pkt, client_hs );
+  uchar scratch[sizeof(fd_stl_t)+sizeof(fd_stl_state_private_t)];
+  fd_stl_t * stl = (fd_stl_t *)scratch;
+  fd_stl_state_private_t * priv = (fd_stl_state_private_t *)(stl+1);
+  assert( (uchar*)(stl+1) == (uchar*)priv );
+
+  client_pkt_sz = fd_stl_s0_client_handle_accept( stl, client, (stl_s0_hs_pkt_t *)server_pkt, client_hs );
   assert( client_pkt_sz==0L );
   assert( client_hs->state == STL_TYPE_HS_DONE );
+  assert( priv->sessions[0].session_id == FD_LOAD( ulong, client_hs->session_id ) );
 
   puts( "S0 handshake: OK" );
 

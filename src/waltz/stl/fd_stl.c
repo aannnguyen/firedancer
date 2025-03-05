@@ -274,14 +274,34 @@ fd_stl_process_packet( fd_stl_t *     stl,
       return;
     }
     fd_stl_s0_client_hs_t* hs = priv->client_hs + i;
-    send_sz = fd_stl_s0_client_handle_accept2( stl,
+    send_sz = fd_stl_s0_client_handle_accept( stl,
+                                         &stl->client_params,
                                          pkt,
-                                         buf,
                                          hs );
     if( send_sz < 0 ) {
       FD_LOG_ERR(("STL client handle accept failed"));
       return;
     }
+
+    /* resend buffered */
+    for( i=0; i<priv->session_sz; ++i ) {
+      if( priv->sessions[i].session_id == FD_LOAD( ulong, hs->session_id ) ) {
+        break;
+      }
+    }
+    FD_TEST( i < priv->session_sz );
+    fd_stl_sesh_t* sesh = priv->sessions + i;
+
+    uchar scratch[STL_MTU];
+    stl_net_ctx_t sock_addr = FD_STL_NET_CTX_T_EMPTY;
+    for (uchar i = 0; i < hs->buffers_sz; i++) {
+      long sz = fd_stl_s0_encode_appdata( sesh, hs->buffers[i].data, hs->buffers[i].sz, scratch );
+      if (sz > 0) {
+        sock_addr.b = sesh->socket_addr;
+        stl->cb.tx( stl, &sock_addr, scratch, (ulong)sz );
+      }
+    }
+
   } else {
     FD_LOG_NOTICE(("stl_process_packet: Unknown hdr type %d", type));
   }

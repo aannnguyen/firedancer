@@ -81,7 +81,7 @@ fd_stl_s0_server_handle_initial( fd_stl_s0_server_params_t const * server,
   //FIXME
   (void)ctx;
   (void)server;
-  
+
   /* Send back the cookie and our server identity */
 
   stl_s0_hs_pkt_server_continue_t * out = (stl_s0_hs_pkt_server_continue_t *)pkt_out;
@@ -152,7 +152,7 @@ fd_stl_s0_client_handle_continue( fd_stl_s0_client_params_t const * client,
 }
 
 void
-fd_stl_s0_client_handle_continue_add_signature( uchar pkt_out[ STL_MTU ], 
+fd_stl_s0_client_handle_continue_add_signature( uchar pkt_out[ STL_MTU ],
                                                 uchar sig[ 64 ] ) {
   stl_s0_hs_pkt_client_accept_t * out = (stl_s0_hs_pkt_client_accept_t *)pkt_out;
   fd_memcpy( out->signature, sig, 64 );
@@ -238,7 +238,7 @@ fd_stl_s0_server_handle_accept( fd_stl_s0_server_params_t const * server,
 }
 
 void
-fd_stl_s0_server_handle_accept_add_signature( uchar pkt_out[ STL_MTU ], 
+fd_stl_s0_server_handle_accept_add_signature( uchar pkt_out[ STL_MTU ],
                                               uchar sig[ 64 ] ) {
   stl_s0_hs_pkt_server_accept_t * out = (stl_s0_hs_pkt_server_accept_t *)pkt_out;
   fd_memcpy( out->signature, sig, 64 );
@@ -265,7 +265,8 @@ fd_stl_s0_client_hs_new( void * mem ) {
 }
 
 long
-fd_stl_s0_client_handle_accept( fd_stl_s0_client_params_t const * client,
+fd_stl_s0_client_handle_accept( fd_stl_t*                         stl,
+                                fd_stl_s0_client_params_t const * client,
                                 stl_s0_hs_pkt_t const *           pkt_in,
                                 fd_stl_s0_client_hs_t *           hs ) {
   (void)client;
@@ -287,54 +288,8 @@ fd_stl_s0_client_handle_accept( fd_stl_s0_client_params_t const * client,
   fd_memcpy( server_identity, in->identity, 32 );
   fd_memcpy( signature, in->signature, 64 );
 
-  /* FIXME: verify signature */
-  // if( FD_UNLIKELY( fd_ed25519_verify( ... )!=FD_ED25519_SUCCESS ) ) {
-  //   return -1;
-  // }
-          
-  hs->state = STL_TYPE_HS_DONE;
-  return 0UL;
-}
 
-long
-fd_stl_s0_client_handle_accept2( fd_stl_t* stl,
-                                stl_s0_hs_pkt_t const * pkt,
-                                uchar                   out[ STL_MTU ],
-                                fd_stl_s0_client_hs_t * hs ) {
-
-  (void)out;
-
-  /* Expect client state to be awaiting STL_TYPE_HS_SERVER_ACCEPT */
-  if( FD_UNLIKELY( hs->state != STL_TYPE_HS_SERVER_ACCEPT ) ) {
-    return -1;
-  }
-
-  if( FD_UNLIKELY( stl_hdr_type( &pkt->hs.base ) != STL_TYPE_HS_SERVER_ACCEPT ) ) {
-    return -1;
-  }
-
-#if 0
-  /* Derive server commitment */
-
-  crypto_hash_sha256_state state[1];
-  *state = hs->transcript;
-  crypto_hash_sha256_update( state, pkt->hs.base.session_id, STL_SESSION_ID_SZ );
-
-  /* Verify server signature */
-
-  uchar signed_msg[64];
-  fd_memcpy( signed_msg, sign_prefix_server, 32 );
-  crypto_hash_sha256_final( state, signed_msg+32 );
-
-  int vfy_err = crypto_sign_ed25519_verify_detached(
-      pkt->verify, signed_msg, sizeof(signed_msg), hs->server_identity );
-  if( vfy_err ) return 0UL;
-#endif
-
-  /* Success!  Return info to caller */
-
-  fd_memcpy( hs->session_id, pkt->hs.base.session_id, STL_SESSION_ID_SZ );
-
+  fd_memcpy( hs->session_id, pkt_in->hs.base.session_id, STL_SESSION_ID_SZ );
   /* create a new session object */
   fd_stl_state_private_t * priv = (fd_stl_state_private_t *)(stl+1);
   fd_stl_sesh_t * sesh = priv->sessions + priv->session_sz++;
@@ -343,15 +298,10 @@ fd_stl_s0_client_handle_accept2( fd_stl_t* stl,
   sesh->socket_addr = hs->socket_addr;
   sesh->server = 0;
 
-  uchar buf[STL_MTU];
-  stl_net_ctx_t sock_addr = FD_STL_NET_CTX_T_EMPTY;
-  for (uchar i = 0; i < hs->buffers_sz; i++) {
-    long sz = fd_stl_s0_encode_appdata( sesh, hs->buffers[i].data, hs->buffers[i].sz, buf );
-    if (sz > 0) {
-      sock_addr.b = sesh->socket_addr;
-      stl->cb.tx( stl, &sock_addr, buf, (ulong)sz );
-    }
-  }
+  /* FIXME: verify signature */
+  // if( FD_UNLIKELY( fd_ed25519_verify( ... )!=FD_ED25519_SUCCESS ) ) {
+  //   return -1;
+  // }
 
   hs->state = STL_TYPE_HS_DONE;
   return 0UL;
