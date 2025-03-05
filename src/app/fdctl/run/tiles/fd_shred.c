@@ -286,10 +286,16 @@ handle_new_cluster_contact_info( fd_shred_ctx_t * ctx,
   ctx->new_dest_ptr = dests;
   ctx->new_dest_cnt = dest_cnt;
 
+  fd_stl_t* stl = ctx->stl;
+
+  uchar devnull[1] = {0};
+
+  stl_net_ctx_t dst = FD_STL_NET_CTX_T_EMPTY;
   for( ulong i=0UL; i<dest_cnt; i++ ) {
     memcpy( dests[i].pubkey.uc, in_dests[i].pubkey, 32UL );
-    dests[i].ip4  = in_dests[i].ip4_addr;
-    dests[i].port = in_dests[i].udp_port;
+    dst.parts.ip4 = dests[i].ip4  = in_dests[i].ip4_addr;
+    dst.parts.port = dests[i].port = in_dests[i].udp_port;
+    fd_stl_send( stl, &dst, devnull, 1UL );
   }
 }
 
@@ -475,7 +481,6 @@ during_frag( fd_shred_ctx_t * ctx,
     ulong hdr_sz = fd_disco_netmux_sig_hdr_sz( sig );
     FD_TEST( hdr_sz <= sz ); /* Should be ensured by the net tile */
 
-    /* TODO can nettile somehow send src sock_addr ? */
     const uchar *ip_hdr = dcache_entry + 14;
     uchar ip_hdr_len = (uchar)((ip_hdr[0] & 0x0F) * 4);
     const uchar *udp_hdr = ip_hdr + ip_hdr_len;
@@ -484,7 +489,7 @@ during_frag( fd_shred_ctx_t * ctx,
                 ((uint)ip_hdr[14] << 16) | ((uint)ip_hdr[15] << 24);
     FD_LOG_NOTICE(("STL src ip: %u, src port: %hu", src_ip, src_port));
 
-    fd_stl_process_packet(ctx->stl, dcache_entry+hdr_sz, sz-hdr_sz, src_ip, src_port);
+    fd_stl_process_packet( ctx->stl, dcache_entry+hdr_sz, sz-hdr_sz, src_ip, src_port );
   }
 }
 
