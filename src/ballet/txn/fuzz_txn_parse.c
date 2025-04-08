@@ -29,7 +29,8 @@ LLVMFuzzerTestOneInput( uchar const * data,
   fd_txn_parse_counters_t counters = {0};
 
   ulong sz = fd_txn_parse( data, size, txn_buf, &counters );
-  __asm__ volatile( "" : "+m,r"(sz) : : "memory" ); /* prevent optimization */
+
+  FD_COMPILER_UNPREDICTABLE(sz); // What problem is being solved here?
 
   if( FD_LIKELY( sz>0UL ) ) {
     FD_FUZZ_MUST_BE_COVERED;
