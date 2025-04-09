@@ -22,6 +22,12 @@
 #define POOL_T    fd_quic_tls_hs_t
 #include "../../util/tmpl/fd_pool.c"
 
+/* Handshake FIFO cache dlist */
+#define DLIST_NAME  fd_quic_tls_hs_cache
+#define DLIST_ELE_T fd_quic_tls_hs_t
+#include "../../util/tmpl/fd_dlist.c"
+
+/* stateless reset token */
 struct fd_quic_token {
   union{
     uchar raw[16];

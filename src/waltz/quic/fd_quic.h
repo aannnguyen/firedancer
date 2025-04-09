@@ -131,6 +131,7 @@ struct fd_quic_layout {
   ulong conn_footprint;    /* sizeof a conn                    */
   ulong conn_map_off;      /* offset of conn map mem region    */
   ulong token_map_off;     /* offset of token map mem region   */
+  int   lg_token_cnt;      /* log_2 of the token map capacity  */
   int   lg_slot_cnt;       /* see conn_map_new                 */
   ulong hs_pool_off;       /* offset of the handshake pool     */
   ulong stream_pool_off;   /* offset of the stream pool        */
