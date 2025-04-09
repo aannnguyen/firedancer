@@ -82,6 +82,21 @@ fd_hpack_wr_user_agent( fd_h2_rbuf_t * rbuf_tx,
   return fd_hpack_wr_private_name_indexed_0( rbuf_tx, 0x7a, user_agent, user_agent_len );
 }
 
+/* fd_hpack_wr_auth_bearer writes an 'authorization: Bearer xxx' header.
+   Uses a never-indexed literal to prevent compression attacks. */
+
+static inline int
+fd_hpack_wr_auth_bearer( fd_h2_rbuf_t * rbuf_tx,
+                         char const *   auth_token,
+                         ulong          auth_token_len ) {
+  uchar const prefix[3] = { 0x1f, 0x08, (uchar)( 7+auth_token_len ) };
+  if( FD_UNLIKELY( fd_h2_rbuf_free_sz( rbuf_tx ) < sizeof(prefix)+7+auth_token_len ) ) return 0;
+  fd_h2_rbuf_push( rbuf_tx, prefix,     sizeof(prefix) );
+  fd_h2_rbuf_push( rbuf_tx, "Bearer ",  7              );
+  fd_h2_rbuf_push( rbuf_tx, auth_token, auth_token_len );
+  return 1;
+}
+
 FD_PROTOTYPES_END
 
 #endif /* HEADER_fd_src_waltz_h2_fd_hpack_wr_h */

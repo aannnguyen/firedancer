@@ -133,8 +133,9 @@ fd_h2_rx( fd_h2_conn_t *            conn,
    expires. */
 
 void
-fd_h2_tx_control( fd_h2_conn_t * conn,
-                  fd_h2_rbuf_t * rbuf_tx );
+fd_h2_tx_control( fd_h2_conn_t *            conn,
+                  fd_h2_rbuf_t *            rbuf_tx,
+                  fd_h2_callbacks_t const * cb );
 
 /* fd_h2_tx_check_sz checks whether rbuf_tx has enough space to buffer
    a frame for sending.  frame_max is the max frame size to check for.
