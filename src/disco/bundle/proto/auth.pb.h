@@ -27,12 +27,12 @@ typedef struct _auth_GenerateAuthChallengeRequest {
     auth_GenerateAuthChallengeRequest_pubkey_t pubkey;
 } auth_GenerateAuthChallengeRequest;
 
-typedef PB_BYTES_ARRAY_T(256) auth_GenerateAuthChallengeResponse_challenge_t;
+typedef PB_BYTES_ARRAY_T(9) auth_GenerateAuthChallengeResponse_challenge_t;
 typedef struct _auth_GenerateAuthChallengeResponse {
     auth_GenerateAuthChallengeResponse_challenge_t challenge; /* string */
 } auth_GenerateAuthChallengeResponse;
 
-typedef PB_BYTES_ARRAY_T(256) auth_GenerateAuthTokensRequest_challenge_t;
+typedef PB_BYTES_ARRAY_T(9) auth_GenerateAuthTokensRequest_challenge_t;
 typedef PB_BYTES_ARRAY_T(32) auth_GenerateAuthTokensRequest_client_pubkey_t;
 typedef PB_BYTES_ARRAY_T(64) auth_GenerateAuthTokensRequest_signed_challenge_t;
 typedef struct _auth_GenerateAuthTokensRequest {
@@ -190,8 +190,8 @@ extern const pb_msgdesc_t auth_RefreshAccessTokenResponse_msg;
 /* Maximum encoded size of messages (where known) */
 #define AUTH_AUTH_PB_H_MAX_SIZE                  auth_GenerateAuthTokensResponse_size
 #define auth_GenerateAuthChallengeRequest_size   36
-#define auth_GenerateAuthChallengeResponse_size  259
-#define auth_GenerateAuthTokensRequest_size      359
+#define auth_GenerateAuthChallengeResponse_size  11
+#define auth_GenerateAuthTokensRequest_size      111
 #define auth_GenerateAuthTokensResponse_size     572
 #define auth_RefreshAccessTokenRequest_size      259
 #define auth_RefreshAccessTokenResponse_size     286

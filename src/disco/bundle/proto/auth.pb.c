@@ -9,10 +9,10 @@
 PB_BIND(auth_GenerateAuthChallengeRequest, auth_GenerateAuthChallengeRequest, AUTO)
 
 
-PB_BIND(auth_GenerateAuthChallengeResponse, auth_GenerateAuthChallengeResponse, 2)
+PB_BIND(auth_GenerateAuthChallengeResponse, auth_GenerateAuthChallengeResponse, AUTO)
 
 
-PB_BIND(auth_GenerateAuthTokensRequest, auth_GenerateAuthTokensRequest, 2)
+PB_BIND(auth_GenerateAuthTokensRequest, auth_GenerateAuthTokensRequest, AUTO)
 
 
 PB_BIND(auth_Token, auth_Token, 2)
