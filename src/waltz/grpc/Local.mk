@@ -1,4 +1,7 @@
-$(call add-hdrs,fd_grpc.h)
-$(call add-objs,fd_grpc,fd_waltz)
-$(call make-unit-test,test_grpc,test_grpc,fd_waltz fd_util)
-$(call run-unit-test,test_grpc)
+$(call add-hdrs,fd_grpc_codec.h)
+$(call add-objs,fd_grpc_codec,fd_waltz)
+$(call make-unit-test,fd_grpc_codec,fd_grpc_codec,fd_waltz fd_ballet fd_util)
+$(call run-unit-test,fd_grpc_codec)
+
+$(call add-hdrs,fd_grpc_client.h)
+$(call add-objs,fd_grpc_client,fd_waltz)
