@@ -23,6 +23,8 @@
 #include "fd_log.h"
 #ifdef __has_include
 #if __has_include("../../app/fdctl/version.h")
+#endif
+#endif
 #include "../../app/fdctl/version.h"
 
 
